@@ -9,7 +9,7 @@ const inter = Inter({ subsets: ['latin'] });
 export const metadata: Metadata = {
   title: 'MyTurn - Smart Queue Management',
   description: 'Join virtual queues at various institutions and companies. Manage your waiting time efficiently with real-time updates.',
-  keywords: 'queue management, virtual queue, waiting time, appointments, Zambia',
+  keywords: 'queue management, virtual queue, waiting time, appointments, Zambia'
 };
 
 export default function RootLayout({
