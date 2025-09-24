@@ -184,10 +184,10 @@ export function ClientLayout({ children }: ClientLayoutProps) {
               <div className="h-6 w-px bg-border" />
               <div className="flex items-center space-x-2">
                 <div className="w-8 h-8 bg-gradient-to-r from-primary to-secondary rounded-full flex items-center justify-center">
-                  <span className="text-sm font-medium text-primary-foreground">JD</span>
+                  <span className="text-sm font-medium text-primary-foreground">SS</span>
                 </div>
                 <div className="hidden sm:block">
-                  <p className="text-sm font-medium">John Doe</p>
+                  <p className="text-sm font-medium">Samuel simutwe</p>
                   <p className="text-xs text-muted-foreground">Client</p>
                 </div>
               </div>

@@ -60,8 +60,8 @@ export default function ClientDashboard() {
         {/* Welcome Section */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold">Welcome back, John!</h1>
-            <p className="text-muted-foreground mt-1">
+            <h1 className="text-3xl font-bold">Welcome back, Sam</h1>
+            <p className="text-muted-foreground ">
               {currentTime.toLocaleDateString('en-GB', { 
                 weekday: 'long', 
                 year: 'numeric', 
