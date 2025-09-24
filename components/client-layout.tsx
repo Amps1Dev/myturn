@@ -33,11 +33,6 @@ const navigation = [
     icon: Clock,
   },
   {
-    name: 'Book Slot',
-    href: '/client/book-slot',
-    icon: Calendar,
-  },
-  {
     name: 'Companies',
     href: '/client/companies',
     icon: Building2,
