@@ -98,7 +98,7 @@ export default function MyQueuesPage() {
                         ? "bg-red-600"
                         : "bg-gray-500"
                     } text-white`}
-                  >s
+                  >
                     {q.status}
                   </Badge>
 
