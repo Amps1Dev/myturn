@@ -120,18 +120,6 @@ const QueueManagement = () => {
           </div>
           
           <div className="flex items-center gap-3">
-            <Button
-              variant="outline"
-              onClick={() => setDarkMode(!darkMode)}
-              className={`${
-                darkMode 
-                  ? 'border-[#6e473b] text-[#beb5a9] hover:bg-[#6e473b]' 
-                  : 'border-[#a78d78] text-[#6e473b] hover:bg-[#a78d78] hover:text-white'
-              }`}
-            >
-              {darkMode ? '☀️' : '🌙'}
-            </Button>
-            
             <select 
               value={selectedTimeRange}
               onChange={(e) => setSelectedTimeRange(e.target.value)}

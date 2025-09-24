@@ -1,5 +1,4 @@
-"use client"
-
+"use client";
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -43,11 +42,15 @@ import {
   FileText,
   Lock
 } from "lucide-react";
-import Link from "next/link";
-import { CompanyLayout } from "@/components/company-layout";
+
+// Mock CompanyLayout component since it's not available
+const CompanyLayout = ({ children }: { children: React.ReactNode }) => (
+  <div className="container mx-auto p-6">
+    {children}
+  </div>
+);
 
 const CompanySettings = () => {
-  const [darkMode, setDarkMode] = useState(false);
   const [activeTab, setActiveTab] = useState('general');
   const [isEditing, setIsEditing] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -93,14 +96,6 @@ const CompanySettings = () => {
     systemDownAlert: { enabled: true }
   });
 
-  useEffect(() => {
-    if (darkMode) {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
-  }, [darkMode]);
-
   const tabs = [
     { id: 'general', label: 'General', icon: Building2 },
     { id: 'queues', label: 'Queue Settings', icon: Users },
@@ -118,11 +113,7 @@ const CompanySettings = () => {
         return (
           <div className="space-y-6">
             {/* Company Profile */}
-            <Card className={`${
-              darkMode 
-                ? 'bg-[#6e473b] border-[#a78d78] text-white' 
-                : 'bg-white border-[#beb5a9]'
-            }`}>
+            <Card className="bg-white border-[#beb5a9]">
               <CardHeader>
                 <div className="flex justify-between items-center">
                   <div>
@@ -130,18 +121,14 @@ const CompanySettings = () => {
                       <Building2 className="h-5 w-5" />
                       Company Profile
                     </CardTitle>
-                    <CardDescription className={darkMode ? 'text-gray-400' : 'text-gray-600'}>
+                    <CardDescription className="text-gray-600">
                       Manage your company information and contact details
                     </CardDescription>
                   </div>
                   <Button
                     variant="outline"
                     onClick={() => setIsEditing(!isEditing)}
-                    className={`${
-                      darkMode 
-                        ? 'border-[#a78d78] text-[#beb5a9] hover:bg-[#a78d78]' 
-                        : 'border-[#6e473b] text-[#6e473b] hover:bg-[#6e473b] hover:text-white'
-                    }`}
+                    className="border-[#6e473b] text-[#6e473b] hover:bg-[#6e473b] hover:text-white"
                   >
                     <Edit className="h-4 w-4 mr-2" />
                     {isEditing ? 'Cancel' : 'Edit'}
@@ -151,7 +138,7 @@ const CompanySettings = () => {
               <CardContent className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                    <label className="block text-sm font-medium mb-2 text-gray-700">
                       Company Name
                     </label>
                     {isEditing ? (
@@ -159,21 +146,17 @@ const CompanySettings = () => {
                         type="text"
                         value={companyData.name}
                         onChange={(e) => setCompanyData({...companyData, name: e.target.value})}
-                        className={`w-full px-3 py-2 border rounded-lg ${
-                          darkMode 
-                            ? 'bg-[#291c0e] border-[#a78d78] text-white' 
-                            : 'bg-white border-[#beb5a9] text-gray-900'
-                        }`}
+                        className="w-full px-3 py-2 border rounded-lg bg-white border-[#beb5a9] text-gray-900"
                       />
                     ) : (
-                      <p className={`px-3 py-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                      <p className="px-3 py-2 text-gray-700">
                         {companyData.name}
                       </p>
                     )}
                   </div>
                   
                   <div>
-                    <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                    <label className="block text-sm font-medium mb-2 text-gray-700">
                       Email
                     </label>
                     {isEditing ? (
@@ -181,21 +164,17 @@ const CompanySettings = () => {
                         type="email"
                         value={companyData.email}
                         onChange={(e) => setCompanyData({...companyData, email: e.target.value})}
-                        className={`w-full px-3 py-2 border rounded-lg ${
-                          darkMode 
-                            ? 'bg-[#291c0e] border-[#a78d78] text-white' 
-                            : 'bg-white border-[#beb5a9] text-gray-900'
-                        }`}
+                        className="w-full px-3 py-2 border rounded-lg bg-white border-[#beb5a9] text-gray-900"
                       />
                     ) : (
-                      <p className={`px-3 py-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                      <p className="px-3 py-2 text-gray-700">
                         {companyData.email}
                       </p>
                     )}
                   </div>
                   
                   <div>
-                    <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                    <label className="block text-sm font-medium mb-2 text-gray-700">
                       Phone
                     </label>
                     {isEditing ? (
@@ -203,32 +182,24 @@ const CompanySettings = () => {
                         type="tel"
                         value={companyData.phone}
                         onChange={(e) => setCompanyData({...companyData, phone: e.target.value})}
-                        className={`w-full px-3 py-2 border rounded-lg ${
-                          darkMode 
-                            ? 'bg-[#291c0e] border-[#a78d78] text-white' 
-                            : 'bg-white border-[#beb5a9] text-gray-900'
-                        }`}
+                        className="w-full px-3 py-2 border rounded-lg bg-white border-[#beb5a9] text-gray-900"
                       />
                     ) : (
-                      <p className={`px-3 py-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                      <p className="px-3 py-2 text-gray-700">
                         {companyData.phone}
                       </p>
                     )}
                   </div>
                   
                   <div>
-                    <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                    <label className="block text-sm font-medium mb-2 text-gray-700">
                       Industry
                     </label>
                     {isEditing ? (
                       <select
                         value={companyData.industry}
                         onChange={(e) => setCompanyData({...companyData, industry: e.target.value})}
-                        className={`w-full px-3 py-2 border rounded-lg ${
-                          darkMode 
-                            ? 'bg-[#291c0e] border-[#a78d78] text-white' 
-                            : 'bg-white border-[#beb5a9] text-gray-900'
-                        }`}
+                        className="w-full px-3 py-2 border rounded-lg bg-white border-[#beb5a9] text-gray-900"
                       >
                         <option value="Technology">Technology</option>
                         <option value="Healthcare">Healthcare</option>
@@ -238,7 +209,7 @@ const CompanySettings = () => {
                         <option value="Education">Education</option>
                       </select>
                     ) : (
-                      <p className={`px-3 py-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                      <p className="px-3 py-2 text-gray-700">
                         {companyData.industry}
                       </p>
                     )}
@@ -246,7 +217,7 @@ const CompanySettings = () => {
                 </div>
                 
                 <div>
-                  <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                  <label className="block text-sm font-medium mb-2 text-gray-700">
                     Address
                   </label>
                   {isEditing ? (
@@ -254,14 +225,10 @@ const CompanySettings = () => {
                       value={companyData.address}
                       onChange={(e) => setCompanyData({...companyData, address: e.target.value})}
                       rows={2}
-                      className={`w-full px-3 py-2 border rounded-lg ${
-                        darkMode 
-                          ? 'bg-[#291c0e] border-[#a78d78] text-white' 
-                          : 'bg-white border-[#beb5a9] text-gray-900'
-                      }`}
+                      className="w-full px-3 py-2 border rounded-lg bg-white border-[#beb5a9] text-gray-900"
                     />
                   ) : (
-                    <p className={`px-3 py-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                    <p className="px-3 py-2 text-gray-700">
                       {companyData.address}
                     </p>
                   )}
@@ -270,11 +237,7 @@ const CompanySettings = () => {
                 {isEditing && (
                   <div className="flex gap-3 pt-4">
                     <Button
-                      className={`${
-                        darkMode 
-                          ? 'bg-[#a78d78] hover:bg-[#6e473b]' 
-                          : 'bg-[#6e473b] hover:bg-[#291c0e]'
-                      } text-white`}
+                      className="bg-[#6e473b] hover:bg-[#291c0e] text-white"
                     >
                       <Save className="h-4 w-4 mr-2" />
                       Save Changes
@@ -291,14 +254,10 @@ const CompanySettings = () => {
             </Card>
 
             {/* Account Plan */}
-            <Card className={`${
-              darkMode 
-                ? 'bg-[#6e473b] border-[#a78d78] text-white' 
-                : 'bg-white border-[#beb5a9]'
-            }`}>
+            <Card className="bg-white border-[#beb5a9]">
               <CardHeader>
                 <CardTitle>Current Plan</CardTitle>
-                <CardDescription className={darkMode ? 'text-gray-400' : 'text-gray-600'}>
+                <CardDescription className="text-gray-600">
                   Your subscription and usage details
                 </CardDescription>
               </CardHeader>
@@ -306,7 +265,7 @@ const CompanySettings = () => {
                 <div className="flex justify-between items-start">
                   <div>
                     <h3 className="text-lg font-semibold text-[#a78d78]">Professional Plan</h3>
-                    <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'} mt-1`}>
+                    <p className="text-sm text-gray-600 mt-1">
                       Up to 10 queues, unlimited customers
                     </p>
                     <div className="mt-4 space-y-2">
@@ -324,7 +283,7 @@ const CompanySettings = () => {
                   </div>
                   <div className="text-right">
                     <p className="text-2xl font-bold text-[#a78d78]">$49</p>
-                    <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>per month</p>
+                    <p className="text-sm text-gray-600">per month</p>
                     <Button 
                       variant="outline" 
                       size="sm" 
@@ -343,51 +302,39 @@ const CompanySettings = () => {
         return (
           <div className="space-y-6">
             {/* Queue Configuration */}
-            <Card className={`${
-              darkMode 
-                ? 'bg-[#6e473b] border-[#a78d78] text-white' 
-                : 'bg-white border-[#beb5a9]'
-            }`}>
+            <Card className="bg-white border-[#beb5a9]">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Users className="h-5 w-5" />
                   Queue Configuration
                 </CardTitle>
-                <CardDescription className={darkMode ? 'text-gray-400' : 'text-gray-600'}>
+                <CardDescription className="text-gray-600">
                   Configure default settings for your queues
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                    <label className="block text-sm font-medium mb-2 text-gray-700">
                       Maximum Queue Size
                     </label>
                     <input
                       type="number"
                       value={queueSettings.maxQueueSize}
-                      onChange={(e) => setQueueSettings({...queueSettings, maxQueueSize: parseInt(e.target.value)})}
-                      className={`w-full px-3 py-2 border rounded-lg ${
-                        darkMode 
-                          ? 'bg-[#291c0e] border-[#a78d78] text-white' 
-                          : 'bg-white border-[#beb5a9] text-gray-900'
-                      }`}
+                      onChange={(e) => setQueueSettings({...queueSettings, maxQueueSize: parseInt(e.target.value) || 0})}
+                      className="w-full px-3 py-2 border rounded-lg bg-white border-[#beb5a9] text-gray-900"
                     />
                   </div>
                   
                   <div>
-                    <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                    <label className="block text-sm font-medium mb-2 text-gray-700">
                       Default Wait Time (minutes)
                     </label>
                     <input
                       type="number"
                       value={queueSettings.defaultWaitTime}
-                      onChange={(e) => setQueueSettings({...queueSettings, defaultWaitTime: parseInt(e.target.value)})}
-                      className={`w-full px-3 py-2 border rounded-lg ${
-                        darkMode 
-                          ? 'bg-[#291c0e] border-[#a78d78] text-white' 
-                          : 'bg-white border-[#beb5a9] text-gray-900'
-                      }`}
+                      onChange={(e) => setQueueSettings({...queueSettings, defaultWaitTime: parseInt(e.target.value) || 0})}
+                      className="w-full px-3 py-2 border rounded-lg bg-white border-[#beb5a9] text-gray-900"
                     />
                   </div>
                 </div>
@@ -406,15 +353,15 @@ const CompanySettings = () => {
                         <input
                           type="checkbox"
                           id={setting.key}
-                          checked={queueSettings[setting.key]}
+                          checked={queueSettings[setting.key as keyof typeof queueSettings] as boolean}
                           onChange={(e) => setQueueSettings({...queueSettings, [setting.key]: e.target.checked})}
                           className="mt-1"
                         />
                         <div>
-                          <label htmlFor={setting.key} className={`font-medium cursor-pointer ${darkMode ? 'text-white' : 'text-gray-900'}`}>
+                          <label htmlFor={setting.key} className="font-medium cursor-pointer text-gray-900">
                             {setting.label}
                           </label>
-                          <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                          <p className="text-sm text-gray-600">
                             {setting.description}
                           </p>
                         </div>
@@ -426,17 +373,13 @@ const CompanySettings = () => {
             </Card>
 
             {/* Operating Hours */}
-            <Card className={`${
-              darkMode 
-                ? 'bg-[#6e473b] border-[#a78d78] text-white' 
-                : 'bg-white border-[#beb5a9]'
-            }`}>
+            <Card className="bg-white border-[#beb5a9]">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Clock className="h-5 w-5" />
                   Operating Hours
                 </CardTitle>
-                <CardDescription className={darkMode ? 'text-gray-400' : 'text-gray-600'}>
+                <CardDescription className="text-gray-600">
                   Set your business hours for queue operations
                 </CardDescription>
               </CardHeader>
@@ -472,11 +415,7 @@ const CompanySettings = () => {
                                 [day]: { ...hours, open: e.target.value }
                               }
                             })}
-                            className={`px-3 py-1 border rounded ${
-                              darkMode 
-                                ? 'bg-[#291c0e] border-[#a78d78] text-white' 
-                                : 'bg-white border-[#beb5a9] text-gray-900'
-                            }`}
+                            className="px-3 py-1 border rounded bg-white border-[#beb5a9] text-gray-900"
                           />
                           <span>to</span>
                           <input
@@ -489,11 +428,7 @@ const CompanySettings = () => {
                                 [day]: { ...hours, close: e.target.value }
                               }
                             })}
-                            className={`px-3 py-1 border rounded ${
-                              darkMode 
-                                ? 'bg-[#291c0e] border-[#a78d78] text-white' 
-                                : 'bg-white border-[#beb5a9] text-gray-900'
-                            }`}
+                            className="px-3 py-1 border rounded bg-white border-[#beb5a9] text-gray-900"
                           />
                         </>
                       )}
@@ -508,17 +443,13 @@ const CompanySettings = () => {
       case 'notifications':
         return (
           <div className="space-y-6">
-            <Card className={`${
-              darkMode 
-                ? 'bg-[#6e473b] border-[#a78d78] text-white' 
-                : 'bg-white border-[#beb5a9]'
-            }`}>
+            <Card className="bg-white border-[#beb5a9]">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Bell className="h-5 w-5" />
                   Notification Preferences
                 </CardTitle>
-                <CardDescription className={darkMode ? 'text-gray-400' : 'text-gray-600'}>
+                <CardDescription className="text-gray-600">
                   Configure how you want to receive notifications
                 </CardDescription>
               </CardHeader>
@@ -537,7 +468,7 @@ const CompanySettings = () => {
                       </div>
                       <input
                         type="checkbox"
-                        checked={notifications[notification.key]}
+                        checked={notifications[notification.key as keyof typeof notifications] as boolean}
                         onChange={(e) => setNotifications({...notifications, [notification.key]: e.target.checked})}
                       />
                     </div>
@@ -568,13 +499,9 @@ const CompanySettings = () => {
                             value={notifications.longWaitAlert.threshold}
                             onChange={(e) => setNotifications({
                               ...notifications,
-                              longWaitAlert: { ...notifications.longWaitAlert, threshold: parseInt(e.target.value) }
+                              longWaitAlert: { ...notifications.longWaitAlert, threshold: parseInt(e.target.value) || 0 }
                             })}
-                            className={`w-20 px-2 py-1 border rounded ${
-                              darkMode 
-                                ? 'bg-[#291c0e] border-[#a78d78] text-white' 
-                                : 'bg-white border-[#beb5a9] text-gray-900'
-                            }`}
+                            className="w-20 px-2 py-1 border rounded bg-white border-[#beb5a9] text-gray-900"
                           />
                           <span className="text-sm">minutes</span>
                         </div>
@@ -601,13 +528,9 @@ const CompanySettings = () => {
                             value={notifications.queueFullAlert.threshold}
                             onChange={(e) => setNotifications({
                               ...notifications,
-                              queueFullAlert: { ...notifications.queueFullAlert, threshold: parseInt(e.target.value) }
+                              queueFullAlert: { ...notifications.queueFullAlert, threshold: parseInt(e.target.value) || 0 }
                             })}
-                            className={`w-20 px-2 py-1 border rounded ${
-                              darkMode 
-                                ? 'bg-[#291c0e] border-[#a78d78] text-white' 
-                                : 'bg-white border-[#beb5a9] text-gray-900'
-                            }`}
+                            className="w-20 px-2 py-1 border rounded bg-white border-[#beb5a9] text-gray-900"
                           />
                           <span className="text-sm">people</span>
                         </div>
@@ -623,41 +546,17 @@ const CompanySettings = () => {
       case 'appearance':
         return (
           <div className="space-y-6">
-            <Card className={`${
-              darkMode 
-                ? 'bg-[#6e473b] border-[#a78d78] text-white' 
-                : 'bg-white border-[#beb5a9]'
-            }`}>
+            <Card className="bg-white border-[#beb5a9]">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Palette className="h-5 w-5" />
                   Appearance Settings
                 </CardTitle>
-                <CardDescription className={darkMode ? 'text-gray-400' : 'text-gray-600'}>
+                <CardDescription className="text-gray-600">
                   Customize the look and feel of your queue interface
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h4 className="font-medium">Dark Mode</h4>
-                    <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                      Switch between light and dark themes
-                    </p>
-                  </div>
-                  <Button
-                    variant="outline"
-                    onClick={() => setDarkMode(!darkMode)}
-                    className={`${
-                      darkMode 
-                        ? 'border-[#a78d78] text-[#beb5a9] hover:bg-[#a78d78]' 
-                        : 'border-[#6e473b] text-[#6e473b] hover:bg-[#6e473b] hover:text-white'
-                    }`}
-                  >
-                    {darkMode ? '☀️ Light Mode' : '🌙 Dark Mode'}
-                  </Button>
-                </div>
-
                 <div className="space-y-4">
                   <h4 className="font-medium">Color Scheme Preview</h4>
                   <div className="grid grid-cols-5 gap-3">
@@ -713,17 +612,13 @@ const CompanySettings = () => {
       case 'security':
         return (
           <div className="space-y-6">
-            <Card className={`${
-              darkMode 
-                ? 'bg-[#6e473b] border-[#a78d78] text-white' 
-                : 'bg-white border-[#beb5a9]'
-            }`}>
+            <Card className="bg-white border-[#beb5a9]">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Shield className="h-5 w-5" />
                   Security Settings
                 </CardTitle>
-                <CardDescription className={darkMode ? 'text-gray-400' : 'text-gray-600'}>
+                <CardDescription className="text-gray-600">
                   Manage your account security and access controls
                 </CardDescription>
               </CardHeader>
@@ -740,7 +635,7 @@ const CompanySettings = () => {
                         <Shield className="h-5 w-5 text-[#a78d78]" />
                         <div>
                           <p className="font-medium">Two-Factor Authentication</p>
-                          <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                          <p className="text-sm text-gray-600">
                             Add an extra layer of security
                           </p>
                         </div>
@@ -758,7 +653,7 @@ const CompanySettings = () => {
                     <div className="flex items-center justify-between p-3 border rounded-lg">
                       <div>
                         <p className="font-medium">API Key</p>
-                        <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                        <p className="text-sm text-gray-600">
                           ••••••••••••••••••••••••••••••••
                         </p>
                       </div>
@@ -783,7 +678,7 @@ const CompanySettings = () => {
                     <div className="flex items-center justify-between">
                       <div>
                         <p className="font-medium">Active Sessions</p>
-                        <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                        <p className="text-sm text-gray-600">
                           3 active sessions
                         </p>
                       </div>
@@ -801,17 +696,13 @@ const CompanySettings = () => {
       case 'billing':
         return (
           <div className="space-y-6">
-            <Card className={`${
-              darkMode 
-                ? 'bg-[#6e473b] border-[#a78d78] text-white' 
-                : 'bg-white border-[#beb5a9]'
-            }`}>
+            <Card className="bg-white border-[#beb5a9]">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <CreditCard className="h-5 w-5" />
                   Billing & Subscription
                 </CardTitle>
-                <CardDescription className={darkMode ? 'text-gray-400' : 'text-gray-600'}>
+                <CardDescription className="text-gray-600">
                   Manage your subscription and payment methods
                 </CardDescription>
               </CardHeader>
@@ -819,12 +710,12 @@ const CompanySettings = () => {
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                   <div className="space-y-4">
                     <h4 className="font-medium">Current Plan</h4>
-                    <div className={`p-4 border rounded-lg ${darkMode ? 'border-[#a78d78]' : 'border-[#beb5a9]'}`}>
+                    <div className="p-4 border rounded-lg border-[#beb5a9]">
                       <div className="flex justify-between items-center mb-2">
                         <h5 className="font-semibold text-[#a78d78]">Professional</h5>
                         <Badge className="bg-green-100 text-green-700">Active</Badge>
                       </div>
-                      <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'} mb-3`}>
+                      <p className="text-sm text-gray-600 mb-3">
                         $49/month • Billed monthly
                       </p>
                       <div className="space-y-2 text-sm">
@@ -858,14 +749,14 @@ const CompanySettings = () => {
 
                   <div className="space-y-4">
                     <h4 className="font-medium">Payment Method</h4>
-                    <div className={`p-4 border rounded-lg ${darkMode ? 'border-[#a78d78]' : 'border-[#beb5a9]'}`}>
+                    <div className="p-4 border rounded-lg border-[#beb5a9]">
                       <div className="flex items-center gap-3 mb-3">
                         <div className="w-8 h-6 bg-blue-600 rounded flex items-center justify-center text-white text-xs font-bold">
                           VISA
                         </div>
                         <span className="font-medium">•••• •••• •••• 4242</span>
                       </div>
-                      <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'} mb-3`}>
+                      <p className="text-sm text-gray-600 mb-3">
                         Expires 12/2025
                       </p>
                       <Button variant="outline" size="sm">
@@ -883,7 +774,7 @@ const CompanySettings = () => {
                         <div key={index} className="flex justify-between items-center p-3 border rounded">
                           <div>
                             <p className="font-medium">{invoice.date}</p>
-                            <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                            <p className="text-sm text-gray-600">
                               Professional Plan
                             </p>
                           </div>
@@ -910,17 +801,13 @@ const CompanySettings = () => {
       case 'integrations':
         return (
           <div className="space-y-6">
-            <Card className={`${
-              darkMode 
-                ? 'bg-[#6e473b] border-[#a78d78] text-white' 
-                : 'bg-white border-[#beb5a9]'
-            }`}>
+            <Card className="bg-white border-[#beb5a9]">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Zap className="h-5 w-5" />
                   Integrations
                 </CardTitle>
-                <CardDescription className={darkMode ? 'text-gray-400' : 'text-gray-600'}>
+                <CardDescription className="text-gray-600">
                   Connect MyTurn with your existing tools and services
                 </CardDescription>
               </CardHeader>
@@ -930,47 +817,47 @@ const CompanySettings = () => {
                     { 
                       name: 'Slack',
                       description: 'Get queue notifications in Slack',
-                      icon: '💬',
+                      icon: '',
                       connected: true
                     },
                     { 
                       name: 'Microsoft Teams',
                       description: 'Integration with Microsoft Teams',
-                      icon: '🔷',
+                      icon: '',
                       connected: false
                     },
                     { 
                       name: 'Twilio SMS',
                       description: 'Send SMS notifications via Twilio',
-                      icon: '📱',
+                      icon: '',
                       connected: true
                     },
                     { 
                       name: 'Zapier',
                       description: 'Automate workflows with Zapier',
-                      icon: '⚡',
+                      icon: '',
                       connected: false
                     },
                     { 
                       name: 'Google Calendar',
                       description: 'Sync appointments with Google Calendar',
-                      icon: '📅',
+                      icon: '',
                       connected: true
                     },
                     { 
                       name: 'Webhooks',
                       description: 'Custom webhook integrations',
-                      icon: '🔗',
+                      icon: '',
                       connected: true
                     }
                   ].map((integration, index) => (
-                    <div key={index} className={`p-4 border rounded-lg ${darkMode ? 'border-[#a78d78]' : 'border-[#beb5a9]'}`}>
+                    <div key={index} className="p-4 border rounded-lg border-[#beb5a9]">
                       <div className="flex items-center justify-between mb-3">
                         <div className="flex items-center gap-3">
                           <span className="text-2xl">{integration.icon}</span>
                           <div>
                             <h4 className="font-medium">{integration.name}</h4>
-                            <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                            <p className="text-sm text-gray-600">
                               {integration.description}
                             </p>
                           </div>
@@ -999,17 +886,13 @@ const CompanySettings = () => {
       case 'data':
         return (
           <div className="space-y-6">
-            <Card className={`${
-              darkMode 
-                ? 'bg-[#6e473b] border-[#a78d78] text-white' 
-                : 'bg-white border-[#beb5a9]'
-            }`}>
+            <Card className="bg-white border-[#beb5a9]">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Database className="h-5 w-5" />
                   Data Management
                 </CardTitle>
-                <CardDescription className={darkMode ? 'text-gray-400' : 'text-gray-600'}>
+                <CardDescription className="text-gray-600">
                   Export your data and manage data retention
                 </CardDescription>
               </CardHeader>
@@ -1017,9 +900,9 @@ const CompanySettings = () => {
                 <div className="space-y-4">
                   <h4 className="font-medium">Data Export</h4>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className={`p-4 border rounded-lg ${darkMode ? 'border-[#a78d78]' : 'border-[#beb5a9]'}`}>
+                    <div className="p-4 border rounded-lg border-[#beb5a9]">
                       <h5 className="font-medium mb-2">Queue Data</h5>
-                      <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'} mb-3`}>
+                      <p className="text-sm text-gray-600 mb-3">
                         Export all queue sessions, wait times, and statistics
                       </p>
                       <Button variant="outline" size="sm" className="w-full">
@@ -1028,9 +911,9 @@ const CompanySettings = () => {
                       </Button>
                     </div>
                     
-                    <div className={`p-4 border rounded-lg ${darkMode ? 'border-[#a78d78]' : 'border-[#beb5a9]'}`}>
+                    <div className="p-4 border rounded-lg border-[#beb5a9]">
                       <h5 className="font-medium mb-2">Customer Data</h5>
-                      <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'} mb-3`}>
+                      <p className="text-sm text-gray-600 mb-3">
                         Export customer information and interaction history
                       </p>
                       <Button variant="outline" size="sm" className="w-full">
@@ -1039,9 +922,9 @@ const CompanySettings = () => {
                       </Button>
                     </div>
                     
-                    <div className={`p-4 border rounded-lg ${darkMode ? 'border-[#a78d78]' : 'border-[#beb5a9]'}`}>
+                    <div className="p-4 border rounded-lg border-[#beb5a9]">
                       <h5 className="font-medium mb-2">Analytics Reports</h5>
-                      <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'} mb-3`}>
+                      <p className="text-sm text-gray-600 mb-3">
                         Export detailed analytics and performance reports
                       </p>
                       <Button variant="outline" size="sm" className="w-full">
@@ -1050,9 +933,9 @@ const CompanySettings = () => {
                       </Button>
                     </div>
                     
-                    <div className={`p-4 border rounded-lg ${darkMode ? 'border-[#a78d78]' : 'border-[#beb5a9]'}`}>
+                    <div className="p-4 border rounded-lg border-[#beb5a9]">
                       <h5 className="font-medium mb-2">Complete Backup</h5>
-                      <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'} mb-3`}>
+                      <p className="text-sm text-gray-600 mb-3">
                         Export all your data in a comprehensive backup
                       </p>
                       <Button variant="outline" size="sm" className="w-full">
@@ -1069,15 +952,11 @@ const CompanySettings = () => {
                     <div className="flex items-center justify-between">
                       <div>
                         <p className="font-medium">Queue Session Data</p>
-                        <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                        <p className="text-sm text-gray-600">
                           How long to keep queue session records
                         </p>
                       </div>
-                      <select className={`px-3 py-1 border rounded ${
-                        darkMode 
-                          ? 'bg-[#291c0e] border-[#a78d78] text-white' 
-                          : 'bg-white border-[#beb5a9] text-gray-900'
-                      }`}>
+                      <select className="px-3 py-1 border rounded bg-white border-[#beb5a9] text-gray-900">
                         <option value="30">30 days</option>
                         <option value="90">90 days</option>
                         <option value="365">1 year</option>
@@ -1088,15 +967,11 @@ const CompanySettings = () => {
                     <div className="flex items-center justify-between">
                       <div>
                         <p className="font-medium">Analytics Data</p>
-                        <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                        <p className="text-sm text-gray-600">
                           How long to keep analytics and reports
                         </p>
                       </div>
-                      <select className={`px-3 py-1 border rounded ${
-                        darkMode 
-                          ? 'bg-[#291c0e] border-[#a78d78] text-white' 
-                          : 'bg-white border-[#beb5a9] text-gray-900'
-                      }`}>
+                      <select className="px-3 py-1 border rounded bg-white border-[#beb5a9] text-gray-900">
                         <option value="90">90 days</option>
                         <option value="365">1 year</option>
                         <option value="1095">3 years</option>
@@ -1109,17 +984,13 @@ const CompanySettings = () => {
             </Card>
 
             {/* Danger Zone */}
-            <Card className={`${
-              darkMode 
-                ? 'bg-red-900 border-red-700 text-white' 
-                : 'bg-red-50 border-red-200'
-            }`}>
+            <Card className="bg-red-50 border-red-200">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-red-600">
                   <AlertCircle className="h-5 w-5" />
                   Danger Zone
                 </CardTitle>
-                <CardDescription className={darkMode ? 'text-red-300' : 'text-red-600'}>
+                <CardDescription className="text-red-600">
                   Irreversible and destructive actions
                 </CardDescription>
               </CardHeader>
@@ -1127,7 +998,7 @@ const CompanySettings = () => {
                 <div className="flex items-center justify-between p-4 border border-red-300 rounded-lg">
                   <div>
                     <h4 className="font-medium text-red-600">Delete Account</h4>
-                    <p className={`text-sm ${darkMode ? 'text-red-300' : 'text-red-600'}`}>
+                    <p className="text-sm text-red-600">
                       Permanently delete your account and all associated data
                     </p>
                   </div>
@@ -1175,11 +1046,7 @@ const CompanySettings = () => {
   };
 
   return (
-    <div className={`min-h-screen transition-colors duration-300 ${
-      darkMode 
-        ? 'bg-[#291c0e] text-white' 
-        : 'bg-[#e1d4c2] text-gray-900'
-    }`}>
+    <div className="min-h-screen transition-colors duration-300 bg-[#e1d4c2] text-gray-900">
       <CompanyLayout>
         {/* Header */}
         <div className="flex justify-between items-center mb-8">
@@ -1187,32 +1054,16 @@ const CompanySettings = () => {
             <Settings className="h-8 w-8 text-[#6e473b]" />
             <div>
               <h1 className="text-3xl font-bold">Company Settings</h1>
-              <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+              <p className="text-sm text-gray-600">
                 Manage your company preferences and configuration
               </p>
             </div>
           </div>
-          
-          <Button
-            variant="outline"
-            onClick={() => setDarkMode(!darkMode)}
-            className={`${
-              darkMode 
-                ? 'border-[#6e473b] text-[#beb5a9] hover:bg-[#6e473b]' 
-                : 'border-[#a78d78] text-[#6e473b] hover:bg-[#a78d78] hover:text-white'
-            }`}
-          >
-            {darkMode ? '☀️' : '🌙'}
-          </Button>
         </div>
 
         <div className="flex gap-8">
           {/* Sidebar Navigation */}
-          <div className={`w-64 ${
-            darkMode 
-              ? 'bg-[#6e473b] border-[#a78d78]' 
-              : 'bg-white border-[#beb5a9]'
-          } border rounded-lg p-4 h-fit`}>
+          <div className="w-64 bg-white border-[#beb5a9] border rounded-lg p-4 h-fit">
             <nav className="space-y-2">
               {tabs.map((tab) => (
                 <button
@@ -1220,12 +1071,8 @@ const CompanySettings = () => {
                   onClick={() => setActiveTab(tab.id)}
                   className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors ${
                     activeTab === tab.id
-                      ? darkMode 
-                        ? 'bg-[#a78d78] text-white' 
-                        : 'bg-[#6e473b] text-white'
-                      : darkMode
-                        ? 'hover:bg-[#291c0e] text-gray-300'
-                        : 'hover:bg-[#e1d4c2] text-gray-700'
+                      ? 'bg-[#6e473b] text-white'
+                      : 'hover:bg-[#e1d4c2] text-gray-700'
                   }`}
                 >
                   <tab.icon className="h-5 w-5" />
@@ -1245,20 +1092,12 @@ const CompanySettings = () => {
         <div className="mt-8 flex justify-end gap-3">
           <Button
             variant="outline"
-            className={`${
-              darkMode 
-                ? 'border-[#a78d78] text-[#beb5a9] hover:bg-[#a78d78]' 
-                : 'border-[#6e473b] text-[#6e473b] hover:bg-[#6e473b] hover:text-white'
-            }`}
+            className="border-[#6e473b] text-[#6e473b] hover:bg-[#6e473b] hover:text-white"
           >
             Reset to Defaults
           </Button>
           <Button
-            className={`${
-              darkMode 
-                ? 'bg-[#a78d78] hover:bg-[#6e473b]' 
-                : 'bg-[#6e473b] hover:bg-[#291c0e]'
-            } text-white`}
+            className="bg-[#6e473b] hover:bg-[#291c0e] text-white"
           >
             <Save className="h-4 w-4 mr-2" />
             Save All Changes
