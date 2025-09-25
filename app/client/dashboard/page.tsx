@@ -70,7 +70,7 @@ export default function ClientDashboard() {
               })}
             </p>
           </div>
-          <Link href="/client/book-slot">
+          <Link href="/client/companies">
             <Button className="myturn-button-primary">
               <Plus className="mr-2 h-4 w-4" />
               Join Queue
@@ -162,7 +162,7 @@ export default function ClientDashboard() {
                       <div className="space-y-2">
                         <div className="flex items-center justify-between text-sm">
                           <span>Position in queue</span>
-                          <span className="font-medium">#{queue.position}</span>
+                          <span className="font-medium">{queue.position}</span>
                         </div>
                         <Progress value={70} className="h-2" />
                         <div className="flex items-center justify-between text-sm text-muted-foreground">
@@ -275,7 +275,8 @@ export default function ClientDashboard() {
                     </div>
                   </div>
                 ))}
-                <Link href="/client/book-slot">
+                
+                <Link href="/client/my-queue">
                   <Button variant="ghost" size="sm" className="w-full">
                     <Plus className="mr-2 h-3 w-3" />
                     Book Appointment

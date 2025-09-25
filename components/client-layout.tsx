@@ -174,7 +174,6 @@ export function ClientLayout({ children }: ClientLayoutProps) {
           >
             <Menu className="h-5 w-5" />
           </Button>
-          
           <div className="h-6 w-px bg-border lg:hidden" />
           
           <div className="flex flex-1 gap-x-4 self-stretch lg:gap-x-6">
@@ -184,7 +183,9 @@ export function ClientLayout({ children }: ClientLayoutProps) {
               <div className="h-6 w-px bg-border" />
               <div className="flex items-center space-x-2">
                 <div className="w-8 h-8 bg-gradient-to-r from-primary to-secondary rounded-full flex items-center justify-center">
-                  <span className="text-sm font-medium text-primary-foreground">SS</span>
+                <button><span onClick={() => (window.location.href="./profile")}
+                  className="text-sm font-medium text-primary-foreground">SS</span>
+                  </button>
                 </div>
                 <div className="hidden sm:block">
                   <p className="text-sm font-medium">Samuel simutwe</p>
@@ -193,6 +194,7 @@ export function ClientLayout({ children }: ClientLayoutProps) {
               </div>
             </div>
           </div>
+
         </div>
 
         {/* Page content */}

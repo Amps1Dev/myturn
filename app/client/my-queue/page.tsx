@@ -431,7 +431,7 @@ const MyQueueSlotsPage = () => {
                       Service: {giftModal.slot.service}
                     </p>
                     <p className="text-sm text-[#6e473b] dark:text-[#beb5a9]">
-                      Position: #{giftModal.slot.position} of {giftModal.slot.totalInQueue}
+                      Position: {giftModal.slot.position} of {giftModal.slot.totalInQueue}
                     </p>
                   </div>
 
