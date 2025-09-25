@@ -117,12 +117,12 @@ const ClientProfileEdit: React.FC = () => {
   };
 
   const ProfileSection: React.FC<ProfileSectionProps> = ({ title, icon: Icon, children }) => (
-    <div className="bg-white rounded-lg shadow-lg p-6 border border-[#beb5a9]" style={{ borderRadius: '5px' }}>
+    <div className="bg-white dark:bg-[#291c0e] rounded-lg shadow-lg p-6 border border-[#beb5a9] dark:border-[#6e473b] transition-colors duration-200" style={{ borderRadius: '5px' }}>
       <div className="flex items-center gap-3 mb-6">
-        <div className="bg-[#a78d78] p-2 rounded-xl">
+        <div className="bg-[#a78d78] dark:bg-[#6e473b] p-2 rounded-xl">
           <Icon className="w-5 h-5 text-white" />
         </div>
-        <h3 className="text-lg font-semibold text-[#291c0e] font-sans">
+        <h3 className="text-lg font-semibold text-[#291c0e] dark:text-[#e1d4c2] font-sans">
           {title}
         </h3>
       </div>
@@ -139,18 +139,12 @@ const ClientProfileEdit: React.FC = () => {
     placeholder?: string;
   }> = ({ value, onChange, disabled, className = "", multiline = false, placeholder }) => {
     const [localValue, setLocalValue] = useState(value);
-    const [isEditing, setIsEditing] = useState(false);
 
     React.useEffect(() => {
       setLocalValue(value);
     }, [value]);
 
-    const handleFocus = () => {
-      setIsEditing(true);
-    };
-
     const handleBlur = () => {
-      setIsEditing(false);
       if (localValue !== value) {
         onChange(localValue);
       }
@@ -166,16 +160,16 @@ const ClientProfileEdit: React.FC = () => {
         (e.target as HTMLElement).blur();
       }
       if (e.key === 'Escape') {
-        setLocalValue(value); // Reset to original value
+        setLocalValue(value);
         (e.target as HTMLElement).blur();
       }
     };
 
-    const baseClassName = `w-full p-3 border border-[#beb5a9] bg-[#e1d4c2] text-[#291c0e] placeholder-[#6e473b] focus:ring-2 focus:ring-[#a78d78] focus:border-transparent transition-all duration-200 font-sans disabled:opacity-60 ${className}`;
+    const baseClassName = `w-full p-3 border border-[#beb5a9] dark:border-[#6e473b] bg-[#e1d4c2] dark:bg-[#6e473b] text-[#291c0e] dark:text-[#e1d4c2] placeholder-[#6e473b] dark:placeholder-[#beb5a9] focus:ring-2 focus:ring-[#a78d78] focus:border-transparent transition-all duration-200 font-sans disabled:opacity-60 ${className}`;
 
     if (disabled) {
       return (
-        <div className={`${baseClassName} cursor-not-allowed bg-gray-100`} style={{ borderRadius: '5px' }}>
+        <div className={`${baseClassName} cursor-not-allowed bg-[#beb5a9] dark:bg-[#291c0e]`} style={{ borderRadius: '5px' }}>
           {value || placeholder}
         </div>
       );
@@ -186,7 +180,6 @@ const ClientProfileEdit: React.FC = () => {
         <textarea
           value={localValue}
           onChange={(e) => setLocalValue(e.target.value)}
-          onFocus={handleFocus}
           onBlur={handleBlur}
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
@@ -202,7 +195,6 @@ const ClientProfileEdit: React.FC = () => {
         type="text"
         value={localValue}
         onChange={(e) => setLocalValue(e.target.value)}
-        onFocus={handleFocus}
         onBlur={handleBlur}
         onKeyDown={handleKeyDown}
         placeholder={placeholder}
@@ -222,7 +214,7 @@ const ClientProfileEdit: React.FC = () => {
     multiline = false 
   }) => (
     <div className="space-y-2">
-      <label className="block text-sm font-medium text-[#291c0e] font-sans">
+      <label className="block text-sm font-medium text-[#291c0e] dark:text-[#e1d4c2] font-sans">
         {label}
       </label>
       {type === 'date' || type === 'number' ? (
@@ -232,7 +224,7 @@ const ClientProfileEdit: React.FC = () => {
           onChange={(e) => onChange(e.target.value)}
           placeholder={placeholder}
           disabled={disabled || !isEditing}
-          className="w-full p-3 border border-[#beb5a9] bg-[#e1d4c2] text-[#291c0e] placeholder-[#6e473b] focus:ring-2 focus:ring-[#a78d78] focus:border-transparent transition-all duration-200 font-sans disabled:opacity-60"
+          className="w-full p-3 border border-[#beb5a9] dark:border-[#6e473b] bg-[#e1d4c2] dark:bg-[#6e473b] text-[#291c0e] dark:text-[#e1d4c2] placeholder-[#6e473b] dark:placeholder-[#beb5a9] focus:ring-2 focus:ring-[#a78d78] focus:border-transparent transition-all duration-200 font-sans disabled:opacity-60"
           style={{ borderRadius: '5px' }}
         />
       ) : (
@@ -250,11 +242,11 @@ const ClientProfileEdit: React.FC = () => {
   const ToggleSwitch: React.FC<ToggleSwitchProps> = ({ checked, onChange, label, description }) => (
     <div className="flex items-center justify-between py-3">
       <div>
-        <p className="text-sm font-medium text-[#291c0e] font-sans">
+        <p className="text-sm font-medium text-[#291c0e] dark:text-[#e1d4c2] font-sans">
           {label}
         </p>
         {description && (
-          <p className="text-xs text-[#6e473b] font-sans">
+          <p className="text-xs text-[#6e473b] dark:text-[#beb5a9] font-sans">
             {description}
           </p>
         )}
@@ -262,7 +254,7 @@ const ClientProfileEdit: React.FC = () => {
       <button
         onClick={onChange}
         className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200 ${
-          checked ? 'bg-[#a78d78]' : 'bg-[#beb5a9]'
+          checked ? 'bg-[#a78d78]' : 'bg-[#beb5a9] dark:bg-[#6e473b]'
         }`}
       >
         <span
@@ -276,28 +268,28 @@ const ClientProfileEdit: React.FC = () => {
 
   return (
     <ClientLayout>
-      <div className="min-h-screen bg-[#e1d4c2] transition-colors duration-300">
+      <div className="min-h-screen bg-[#e1d4c2] dark:bg-[#291c0e] transition-colors duration-300">
         <div className="container mx-auto px-4 py-8 max-w-4xl">
           {/* Header */}
           <div className="flex items-center justify-between mb-8">
             <div>
-              <h1 className="text-3xl font-bold text-[#291c0e] font-sans">
+              <h1 className="text-3xl font-bold text-[#291c0e] dark:text-[#e1d4c2] font-sans">
                 My Profile
               </h1>
-              <p className="text-[#6e473b] font-sans">
+              <p className="text-[#6e473b] dark:text-[#beb5a9] font-sans">
                 Manage your personal information and preferences
               </p>
             </div>
             <div className="flex gap-3">
               {saved && (
-                <div className="flex items-center gap-2 bg-green-100 text-green-800 px-4 py-2 rounded-xl">
+                <div className="flex items-center gap-2 bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400 px-4 py-2 rounded-xl border border-green-200 dark:border-green-800">
                   <Check className="w-4 h-4" />
                   <span className="text-sm font-medium font-sans">Saved!</span>
                 </div>
               )}
               <button
                 onClick={() => setIsEditing(!isEditing)}
-                className="flex items-center gap-2 bg-[#6e473b] text-white px-6 py-3 rounded-xl hover:bg-[#a78d78] transition-all duration-200 font-sans"
+                className="flex items-center gap-2 bg-[#6e473b] dark:bg-[#a78d78] text-white px-6 py-3 rounded-xl hover:bg-[#a78d78] dark:hover:bg-[#6e473b] transition-all duration-200 font-sans"
               >
                 <Edit3 className="w-4 h-4" />
                 {isEditing ? 'Cancel' : 'Edit Profile'}
@@ -309,20 +301,20 @@ const ClientProfileEdit: React.FC = () => {
           <ProfileSection title="Profile Picture" icon={Camera}>
             <div className="flex items-center gap-6">
               <div className="relative">
-                <div className="w-24 h-24 bg-[#a78d78] rounded-full flex items-center justify-center">
+                <div className="w-24 h-24 bg-[#a78d78] dark:bg-[#6e473b] rounded-full flex items-center justify-center">
                   <User className="w-12 h-12 text-white" />
                 </div>
                 {isEditing && (
-                  <button className="absolute -bottom-2 -right-2 bg-[#6e473b] text-white p-2 rounded-full hover:bg-[#a78d78] transition-colors">
+                  <button className="absolute -bottom-2 -right-2 bg-[#6e473b] dark:bg-[#a78d78] text-white p-2 rounded-full hover:bg-[#a78d78] dark:hover:bg-[#6e473b] transition-colors">
                     <Camera className="w-4 h-4" />
                   </button>
                 )}
               </div>
               <div>
-                <h4 className="text-lg font-semibold text-[#291c0e] font-sans">
+                <h4 className="text-lg font-semibold text-[#291c0e] dark:text-[#e1d4c2] font-sans">
                   {profile.firstName} {profile.lastName}
                 </h4>
-                <p className="text-[#6e473b] font-sans">
+                <p className="text-[#6e473b] dark:text-[#beb5a9] font-sans">
                   Member since January 2024
                 </p>
                 {isEditing && (
@@ -423,7 +415,7 @@ const ClientProfileEdit: React.FC = () => {
             <ProfileSection title="Medical Information" icon={Heart}>
               <div className="space-y-4">
                 <div className="grid md:grid-cols-2 gap-4">
-                  <div className="bg-[#beb5a9] p-4 rounded-xl border border-[#a78d78]">
+                  <div className="bg-[#beb5a9] dark:bg-[#6e473b] p-4 rounded-xl border border-[#a78d78]">
                     <ToggleSwitch
                       checked={profile.isPregnant}
                       onChange={() => setProfile({...profile, isPregnant: !profile.isPregnant})}
@@ -431,7 +423,7 @@ const ClientProfileEdit: React.FC = () => {
                       description="For priority queue placement"
                     />
                   </div>
-                  <div className="bg-[#beb5a9] p-4 rounded-xl border border-[#a78d78]">
+                  <div className="bg-[#beb5a9] dark:bg-[#6e473b] p-4 rounded-xl border border-[#a78d78]">
                     <ToggleSwitch
                       checked={profile.hasSpecialNeeds}
                       onChange={() => setProfile({...profile, hasSpecialNeeds: !profile.hasSpecialNeeds})}
@@ -441,7 +433,7 @@ const ClientProfileEdit: React.FC = () => {
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <label className="block text-sm font-medium text-[#291c0e] font-sans">
+                  <label className="block text-sm font-medium text-[#291c0e] dark:text-[#e1d4c2] font-sans">
                     Medical Notes (Optional)
                   </label>
                   <EditableText
@@ -449,10 +441,10 @@ const ClientProfileEdit: React.FC = () => {
                     onChange={(value) => setProfile({...profile, medicalNotes: value})}
                     disabled={!isEditing}
                     multiline={true}
-                    className="placeholder-[#6e473b]"
+                    className="placeholder-[#6e473b] dark:placeholder-[#beb5a9]"
                   />
                   {!profile.medicalNotes && isEditing && (
-                    <p className="text-xs text-[#6e473b] font-sans">
+                    <p className="text-xs text-[#6e473b] dark:text-[#beb5a9] font-sans">
                       Any medical conditions or special requirements...
                     </p>
                   )}
@@ -524,7 +516,7 @@ const ClientProfileEdit: React.FC = () => {
             <div className="mt-8 flex justify-center">
               <button
                 onClick={handleSave}
-                className="bg-[#6e473b] text-white px-8 py-4 rounded-xl font-semibold text-lg hover:bg-[#a78d78] focus:ring-2 focus:ring-[#a78d78] focus:ring-offset-2 focus:ring-offset-[#e1d4c2] transition-all duration-200 flex items-center gap-2 font-sans"
+                className="bg-[#6e473b] dark:bg-[#a78d78] text-white px-8 py-4 rounded-xl font-semibold text-lg hover:bg-[#a78d78] dark:hover:bg-[#6e473b] focus:ring-2 focus:ring-[#a78d78] focus:ring-offset-2 focus:ring-offset-[#e1d4c2] dark:focus:ring-offset-[#291c0e] transition-all duration-200 flex items-center gap-2 font-sans"
               >
                 <Save className="w-5 h-5" />
                 Save Changes
