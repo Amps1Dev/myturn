@@ -19,27 +19,49 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
 
-  const handleLogin = async (userType: 'client' | 'company') => {
+  const handleLogin = async (userType: string) => {
     if (!email || !password) {
       toast.error("Please fill in all fields");
       return;
     }
-
+  
     setIsLoading(true);
     
-    // Simulate API call
-    setTimeout(() => {
-      toast.success(`Welcome back! Logging in as ${userType}...`);
-      
-      if (userType === 'client') {
-        router.push('/client/dashboard');
+    try {
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email,
+          password,
+          userType,
+        }),
+      });
+  
+      const data = await response.json();
+  
+      if (response.ok) {
+        toast.success(`Welcome back, ${data.user.firstName}!`);
+        
+        // Redirect based on ACTUAL user type from database
+        if (data.user.userType === 'company') {
+          router.push('/company/dashboard');
+        } else {
+          router.push('/client/dashboard');
+        }
       } else {
-        router.push('/company/dashboard');
+        toast.error(data.error || 'Login failed');
       }
+    } catch (error) {
+      console.error('Login error:', error);
+      toast.error('Something went wrong. Please try again.');
+    } finally {
       setIsLoading(false);
-    }, 1500);
+    }
   };
-
+  
   return (
     <div className="min-h-screen bg-background flex flex-col">
       {/* Navigation */}
