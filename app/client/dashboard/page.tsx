@@ -15,14 +15,76 @@ import {
   Building2,
   CheckCircle,
   AlertCircle,
-  Plus
+  Plus,
+  Loader2
 } from "lucide-react";
 import Link from "next/link";
 import { ClientLayout } from "@/components/client-layout";
 import { zambianInstitutions, getPopularInstitutions } from "@/lib/data/institutions";
+import { supabase } from "@/utils/supabase/client";
+import { getUserActiveQueues, leaveQueue } from "@/lib/api/queue";
+import { toast } from "sonner";
 
 export default function ClientDashboard() {
   const [currentTime, setCurrentTime] = useState(new Date());
+  const [activeQueues, setActiveQueues] = useState<Array<any>>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [userId, setUserId] = useState<string | null>(null);
+
+  // Get current user
+  useEffect(() => {
+    const getCurrentUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        setUserId(user.id);
+      }
+    };
+    getCurrentUser();
+  }, []);
+
+  // Fetch active queues from database
+  useEffect(() => {
+    const fetchActiveQueues = async () => {
+      if (!userId) return;
+      
+      setIsLoading(true);
+      try {
+        const queues = await getUserActiveQueues(userId);
+        setActiveQueues(queues || []);
+      } catch (error) {
+        console.error('Error fetching queues:', error);
+        toast.error("Failed to load your queues");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchActiveQueues();
+
+    // Set up real-time subscription for queue updates
+    if (userId) {
+      const channel = supabase
+        .channel('queue_changes')
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'queue_entries',
+            filter: `user_id=eq.${userId}`
+          },
+          (payload) => {
+            console.log('Queue update:', payload);
+            fetchActiveQueues(); // Refresh queues on any change
+          }
+        )
+        .subscribe();
+
+      return () => {
+        supabase.removeChannel(channel);
+      };
+    }
+  }, [userId]);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -32,28 +94,24 @@ export default function ClientDashboard() {
     return () => clearInterval(timer);
   }, []);
 
-  const popularInstitutions = getPopularInstitutions();
-  const [activeQueues, setActiveQueues] = useState<Array<any>>([]);
+  const handleLeaveQueue = async (queueId: string) => {
+    if (!userId) return;
 
-  useEffect(() => {
-    const storageKey = 'myturn_bookings';
-    const load = () => {
-      try {
-        const raw = localStorage.getItem(storageKey);
-        const bookings = raw ? JSON.parse(raw) : [];
-        setActiveQueues(bookings);
-      } catch (e) {
-        setActiveQueues([]);
+    try {
+      const result = await leaveQueue(queueId, userId);
+      if (result) {
+        toast.success("Successfully left the queue");
+        setActiveQueues(prev => prev.filter(q => q.id !== queueId));
+      } else {
+        toast.error("Failed to leave queue");
       }
-    };
-    load();
+    } catch (error) {
+      console.error('Error leaving queue:', error);
+      toast.error("An error occurred while leaving the queue");
+    }
+  };
 
-    const onStorage = (e: StorageEvent) => {
-      if (e.key === storageKey) load();
-    };
-    window.addEventListener('storage', onStorage);
-    return () => window.removeEventListener('storage', onStorage);
-  }, []);
+  const popularInstitutions = getPopularInstitutions();
 
   const upcomingAppointments = [
     {
@@ -72,7 +130,7 @@ export default function ClientDashboard() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold">Welcome</h1>
-            <p className="text-muted-foreground ">
+            <p className="text-muted-foreground">
               {currentTime.toLocaleDateString('en-GB', { 
                 weekday: 'long', 
                 year: 'numeric', 
@@ -97,7 +155,7 @@ export default function ClientDashboard() {
               <Users className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">1</div>
+              <div className="text-2xl font-bold">{activeQueues.length}</div>
               <p className="text-xs text-muted-foreground">
                 Currently waiting
               </p>
@@ -157,55 +215,56 @@ export default function ClientDashboard() {
                 <CardDescription>Your active queue positions</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                {activeQueues.length > 0 ? (
+                {isLoading ? (
+                  <div className="text-center py-8">
+                    <Loader2 className="h-8 w-8 animate-spin text-muted-foreground mx-auto" />
+                    <p className="text-sm text-muted-foreground mt-2">Loading your queues...</p>
+                  </div>
+                ) : activeQueues.length > 0 ? (
                   activeQueues.map((queue) => (
                     <div key={queue.id} className="border rounded-lg p-4 space-y-3">
                       <div className="flex items-center justify-between">
                         <div>
-                          <h4 className="font-medium">{queue.institution}</h4>
+                          <h4 className="font-medium">
+                            {queue.institution?.name || 'Unknown Institution'}
+                          </h4>
                           <p className="text-sm text-muted-foreground">
-                            Joined at {queue.joinedAt}
+                            Joined at {new Date(queue.joined_at).toLocaleTimeString('en-GB', {
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            })}
                           </p>
                         </div>
-                        <Badge variant="secondary">Active</Badge>
+                        <Badge variant={queue.status === 'waiting' ? 'secondary' : 'default'}>
+                          {queue.status}
+                        </Badge>
                       </div>
                       
                       <div className="space-y-2">
                         <div className="flex items-center justify-between text-sm">
-                          <span>Position in queue</span>
-                          <span className="font-medium">{queue.position}</span>
+                          <span>Queue Number</span>
+                          <span className="font-medium text-lg">#{queue.queue_number}</span>
                         </div>
                         <Progress value={70} className="h-2" />
                         <div className="flex items-center justify-between text-sm text-muted-foreground">
                           <span className="flex items-center gap-1">
                             <Clock className="h-3 w-3" />
-                            Est. {queue.estimatedTime} mins
+                            Est. {queue.estimated_wait_time} mins
                           </span>
-                            <div className="flex items-center gap-2">
-                              <Link href="/client/my-queue">
-                                <Button variant="ghost" size="sm">
-                                  View Details
-                                </Button>
-                              </Link>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => {
-                                  try {
-                                    const storageKey = 'myturn_bookings';
-                                    const raw = localStorage.getItem(storageKey);
-                                    const existing = raw ? JSON.parse(raw) : [];
-                                    const filtered = existing.filter((b: any) => b.id !== queue.id);
-                                    localStorage.setItem(storageKey, JSON.stringify(filtered));
-                                    setActiveQueues((prev) => prev.filter((p) => p.id !== queue.id));
-                                  } catch (e) {
-                                    console.error('Failed to cancel booking', e);
-                                  }
-                                }}
-                              >
-                                Cancel
+                          <div className="flex items-center gap-2">
+                            <Link href="/client/my-queue">
+                              <Button variant="ghost" size="sm">
+                                View Details
                               </Button>
-                            </div>
+                            </Link>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleLeaveQueue(queue.id)}
+                            >
+                              Cancel
+                            </Button>
+                          </div>
                         </div>
                       </div>
                     </div>

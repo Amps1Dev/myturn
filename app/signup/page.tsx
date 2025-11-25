@@ -12,7 +12,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Users, UserCheck, Building2, ArrowLeft, Eye, EyeOff } from "lucide-react";
 import { toast } from "sonner";
-import { supabase } from "../../utils/supabase/client"; // Add this import
+import { supabase } from "../../utils/supabase/client";
 
 export default function SignupPage() {
   const [formData, setFormData] = useState({
@@ -72,6 +72,14 @@ export default function SignupPage() {
     setIsLoading(true);
     
     try {
+      // Map userType to role enum
+      const roleMapping = {
+        'client': 'client',
+        'company': 'company_admin'
+      } as const;
+      
+      const userRole = roleMapping[formData.userType as keyof typeof roleMapping];
+
       // 1. Sign up the user with Supabase Auth
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: formData.email,
@@ -81,7 +89,7 @@ export default function SignupPage() {
             first_name: formData.firstName,
             last_name: formData.lastName,
             phone: formData.phone,
-            user_type: formData.userType,
+            role: userRole,
           }
         }
       });
@@ -107,9 +115,7 @@ export default function SignupPage() {
           first_name: formData.firstName,
           last_name: formData.lastName,
           phone: formData.phone,
-          user_type: formData.userType,
-          company_name: formData.userType === 'company' ? formData.companyName : null,
-          business_type: formData.userType === 'company' ? formData.businessType : null,
+          role: userRole,
         });
 
       if (profileError) {
@@ -117,6 +123,26 @@ export default function SignupPage() {
         toast.error("Account created but profile setup failed. Please contact support.");
         setIsLoading(false);
         return;
+      }
+
+      // 3. If company user, create company record
+      if (formData.userType === 'company' && formData.companyName) {
+        const { error: companyError } = await supabase
+          .from('companies')
+          .insert({
+            name: formData.companyName,
+            business_type: formData.businessType || 'other',
+            email: formData.email,
+            phone: formData.phone,
+            is_active: true,
+          });
+
+        if (companyError) {
+          console.error('Company creation error:', companyError);
+          toast.error("Account created but company setup failed. Please contact support.");
+          setIsLoading(false);
+          return;
+        }
       }
 
       toast.success("Account created successfully! Please check your email to verify your account.");
