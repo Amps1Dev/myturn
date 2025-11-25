@@ -113,11 +113,55 @@ const ClientProfileEdit: React.FC = () => {
   const handleSave = (): void => {
     setSaved(true);
     setIsEditing(false);
+    try {
+      localStorage.setItem('myturn_profile', JSON.stringify(profile));
+    } catch (e) {
+      // ignore storage errors
+      console.error('Failed to save profile to storage', e);
+    }
+    try {
+      // set a cookie with basic user info so other pages can identify the signed-in user
+      const cookieVal = encodeURIComponent(JSON.stringify({
+        email: profile.email,
+        firstName: profile.firstName,
+        lastName: profile.lastName,
+      }));
+      // cookie valid for 1 year
+      document.cookie = `myturn_user=${cookieVal}; path=/; max-age=${60 * 60 * 24 * 365}`;
+    } catch (e) {
+      console.error('Failed to set user cookie', e);
+    }
     setTimeout(() => setSaved(false), 2000);
   };
 
+  // load profile from localStorage if present
+  React.useEffect(() => {
+    try {
+      const raw = localStorage.getItem('myturn_profile');
+      if (raw) {
+        const stored = JSON.parse(raw);
+        setProfile(prev => ({ ...prev, ...stored }));
+      }
+    } catch (e) {
+      // ignore parse errors
+      console.error('Failed to load profile from storage', e);
+    }
+    // if no localStorage profile, try loading from cookie
+    try {
+      if (!localStorage.getItem('myturn_profile')) {
+        const match = document.cookie.match(/(?:^|; )myturn_user=([^;]+)/);
+        if (match) {
+          const parsed = JSON.parse(decodeURIComponent(match[1]));
+          setProfile(prev => ({ ...prev, ...parsed }));
+        }
+      }
+    } catch (e) {
+      // ignore cookie parse errors
+    }
+  }, []);
+
   const ProfileSection: React.FC<ProfileSectionProps> = ({ title, icon: Icon, children }) => (
-    <div className="bg-white dark:bg-[#291c0e] rounded-lg shadow-lg p-6 border border-[#beb5a9] dark:border-[#6e473b] transition-colors duration-200" style={{ borderRadius: '5px' }}>
+    <div className="bg-white dark:bg-[#291c0e] rounded-lg shadow-lg p-6 border border-[#beb5a9] dark:border-[#6e473b] transition-colors duration-200">
       <div className="flex items-center gap-3 mb-6">
         <div className="bg-[#a78d78] dark:bg-[#6e473b] p-2 rounded-xl">
           <Icon className="w-5 h-5 text-white" />
@@ -169,7 +213,7 @@ const ClientProfileEdit: React.FC = () => {
 
     if (disabled) {
       return (
-        <div className={`${baseClassName} cursor-not-allowed bg-[#beb5a9] dark:bg-[#291c0e]`} style={{ borderRadius: '5px' }}>
+        <div className={`${baseClassName} cursor-not-allowed bg-[#beb5a9] dark:bg-[#291c0e]`}>
           {value || placeholder}
         </div>
       );
@@ -185,7 +229,6 @@ const ClientProfileEdit: React.FC = () => {
           placeholder={placeholder}
           rows={3}
           className={`${baseClassName} resize-none`}
-          style={{ borderRadius: '5px' }}
         />
       );
     }
@@ -199,7 +242,6 @@ const ClientProfileEdit: React.FC = () => {
         onKeyDown={handleKeyDown}
         placeholder={placeholder}
         className={baseClassName}
-        style={{ borderRadius: '5px' }}
       />
     );
   };
@@ -225,7 +267,6 @@ const ClientProfileEdit: React.FC = () => {
           placeholder={placeholder}
           disabled={disabled || !isEditing}
           className="w-full p-3 border border-[#beb5a9] dark:border-[#6e473b] bg-[#e1d4c2] dark:bg-[#6e473b] text-[#291c0e] dark:text-[#e1d4c2] placeholder-[#6e473b] dark:placeholder-[#beb5a9] focus:ring-2 focus:ring-[#a78d78] focus:border-transparent transition-all duration-200 font-sans disabled:opacity-60"
-          style={{ borderRadius: '5px' }}
         />
       ) : (
         <EditableText
@@ -251,18 +292,27 @@ const ClientProfileEdit: React.FC = () => {
           </p>
         )}
       </div>
-      <button
-        onClick={onChange}
-        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200 ${
-          checked ? 'bg-[#a78d78]' : 'bg-[#beb5a9] dark:bg-[#6e473b]'
-        }`}
-      >
-        <span
-          className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-200 ${
-            checked ? 'translate-x-6' : 'translate-x-1'
-          }`}
-        />
-      </button>
+      {checked ? (
+        <button
+          onClick={onChange}
+          role="switch"
+          aria-checked="true"
+          aria-label={`Toggle ${label}`}
+          className="relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200 bg-[#a78d78]"
+        >
+          <span className="inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-200 translate-x-6" />
+        </button>
+      ) : (
+        <button
+          onClick={onChange}
+          role="switch"
+          aria-checked="false"
+          aria-label={`Toggle ${label}`}
+          className="relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200 bg-[#beb5a9] dark:bg-[#6e473b]"
+        >
+          <span className="inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-200 translate-x-1" />
+        </button>
+      )}
     </div>
   );
 
@@ -305,7 +355,7 @@ const ClientProfileEdit: React.FC = () => {
                   <User className="w-12 h-12 text-white" />
                 </div>
                 {isEditing && (
-                  <button className="absolute -bottom-2 -right-2 bg-[#6e473b] dark:bg-[#a78d78] text-white p-2 rounded-full hover:bg-[#a78d78] dark:hover:bg-[#6e473b] transition-colors">
+                  <button aria-label="Upload profile picture" className="absolute -bottom-2 -right-2 bg-[#6e473b] dark:bg-[#a78d78] text-white p-2 rounded-full hover:bg-[#a78d78] dark:hover:bg-[#6e473b] transition-colors">
                     <Camera className="w-4 h-4" />
                   </button>
                 )}

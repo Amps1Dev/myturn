@@ -33,16 +33,27 @@ export default function ClientDashboard() {
   }, []);
 
   const popularInstitutions = getPopularInstitutions();
-  const activeQueues = [
-    {
-      id: '1',
-      institution: 'Zanaco Bank - Cairo Branch',
-      position: 3,
-      estimatedTime: 15,
-      status: 'active',
-      joinedAt: '09:30 AM'
-    }
-  ];
+  const [activeQueues, setActiveQueues] = useState<Array<any>>([]);
+
+  useEffect(() => {
+    const storageKey = 'myturn_bookings';
+    const load = () => {
+      try {
+        const raw = localStorage.getItem(storageKey);
+        const bookings = raw ? JSON.parse(raw) : [];
+        setActiveQueues(bookings);
+      } catch (e) {
+        setActiveQueues([]);
+      }
+    };
+    load();
+
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === storageKey) load();
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, []);
 
   const upcomingAppointments = [
     {
@@ -60,7 +71,7 @@ export default function ClientDashboard() {
         {/* Welcome Section */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold">Welcome back, Sam</h1>
+            <h1 className="text-3xl font-bold">Welcome</h1>
             <p className="text-muted-foreground ">
               {currentTime.toLocaleDateString('en-GB', { 
                 weekday: 'long', 
@@ -170,11 +181,31 @@ export default function ClientDashboard() {
                             <Clock className="h-3 w-3" />
                             Est. {queue.estimatedTime} mins
                           </span>
-                          <Link href="/client/my-queue">
-                            <Button variant="ghost" size="sm">
-                              View Details
-                            </Button>
-                          </Link>
+                            <div className="flex items-center gap-2">
+                              <Link href="/client/my-queue">
+                                <Button variant="ghost" size="sm">
+                                  View Details
+                                </Button>
+                              </Link>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => {
+                                  try {
+                                    const storageKey = 'myturn_bookings';
+                                    const raw = localStorage.getItem(storageKey);
+                                    const existing = raw ? JSON.parse(raw) : [];
+                                    const filtered = existing.filter((b: any) => b.id !== queue.id);
+                                    localStorage.setItem(storageKey, JSON.stringify(filtered));
+                                    setActiveQueues((prev) => prev.filter((p) => p.id !== queue.id));
+                                  } catch (e) {
+                                    console.error('Failed to cancel booking', e);
+                                  }
+                                }}
+                              >
+                                Cancel
+                              </Button>
+                            </div>
                         </div>
                       </div>
                     </div>
@@ -186,7 +217,7 @@ export default function ClientDashboard() {
                     <p className="text-sm text-muted-foreground mb-4">
                       Join a queue to get started
                     </p>
-                    <Link href="/client/book-slot">
+                    <Link href="/client/companies">
                       <Button className="myturn-button-primary">
                         <Plus className="mr-2 h-4 w-4" />
                         Join Queue
@@ -236,7 +267,7 @@ export default function ClientDashboard() {
                                 {institution.currentQueue} in queue
                               </span>
                             </div>
-                            <Link href={`/client/book-slot?institution=${institution.id}`}>
+                            <Link href={`/client/companies?institution=${encodeURIComponent(institution.id)}`}>
                               <Button size="sm" variant="ghost" className="text-xs">
                                 Join
                               </Button>

@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { 
   MapPin, 
   Phone, 
@@ -13,9 +13,11 @@ import {
   ChevronRight
 } from "lucide-react";
 import { ClientLayout } from "@/components/client-layout";
+import { useSearchParams } from "next/navigation";
+import { getInstitutionById } from "@/lib/data/institutions";
 
 interface Company {
-  id: number;
+  id: string | number;
   name: string;
   category: string;
   status: "Open" | "Closed" | "Break";
@@ -44,6 +46,7 @@ const CompaniesPage = () => {
   const [bookingReason, setBookingReason] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [bookingSuccess, setBookingSuccess] = useState(false);
+  const [lastBookingId, setLastBookingId] = useState<string | null>(null);
 
   const companies: Company[] = [
     {
@@ -56,7 +59,7 @@ const CompaniesPage = () => {
       phone: "+260 211 229229",
       hours: "Mon–Fri: 8:00am–4:30pm",
       queueLength: 12,
-      estimatedWait: "25 mins",
+      estimatedWait: "30 mins",
       services: ["Account Opening", "Loans", "Forex Exchange", "General Banking"]
     },
     {
@@ -198,6 +201,33 @@ const CompaniesPage = () => {
     setBookingSuccess(false);
   };
 
+  const searchParams = useSearchParams();
+
+  const mapInstitutionToCompany = (inst: any): Company => ({
+    id: inst.id,
+    name: inst.name,
+    category: inst.category || "",
+    status: inst.status === 'open' ? 'Open' : inst.status === 'busy' ? 'Break' : 'Closed',
+    rating: 4.0,
+    location: inst.location,
+    phone: inst.phone || '',
+    hours: `${inst.operatingHours?.open || ''}–${inst.operatingHours?.close || ''}`,
+    queueLength: inst.currentQueue || 0,
+    estimatedWait: inst.estimatedWaitTime ? `${inst.estimatedWaitTime} mins` : 'N/A',
+    services: inst.services || []
+  });
+
+  useEffect(() => {
+    const institutionId = searchParams?.get?.('institution');
+    if (!institutionId) return;
+    const inst = getInstitutionById(institutionId);
+    if (inst) {
+      const companyLike = mapInstitutionToCompany(inst);
+      // open modal for this institution
+      setTimeout(() => openBookingModal(companyLike), 100);
+    }
+  }, [searchParams]);
+
   const closeBookingModal = () => {
     setBookingModal({ isOpen: false, company: null });
     setSelectedService("");
@@ -215,12 +245,66 @@ const CompaniesPage = () => {
     setTimeout(() => {
       setIsSubmitting(false);
       setBookingSuccess(true);
-      
+      // persist booking to localStorage so dashboard can show it
+      try {
+        const storageKey = 'myturn_bookings';
+        const raw = localStorage.getItem(storageKey);
+        const existing = raw ? JSON.parse(raw) : [];
+        const newBooking = {
+          id: `b_${Date.now()}`,
+          institutionId: String(bookingModal?.company?.id ?? ''),
+          institutionName: bookingModal?.company?.name ?? '',
+          position: (bookingModal?.company?.queueLength ?? 0) + 1,
+          estimatedTime: bookingModal?.company?.estimatedWait ?? '',
+          status: 'booked',
+          joinedAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          // attach the signed-in client profile if available (prefer cookie)
+          user: (() => {
+            try {
+              // check cookie first
+              const match = document.cookie.match(/(?:^|; )myturn_user=([^;]+)/);
+              if (match) {
+                return JSON.parse(decodeURIComponent(match[1]));
+              }
+            } catch (e) {
+              // ignore
+            }
+            try {
+              const p = localStorage.getItem('myturn_profile');
+              if (p) return JSON.parse(p);
+            } catch (e) {
+              // ignore
+            }
+            return null;
+          })(),
+          service: selectedService,
+          reason: bookingReason,
+        };
+        setLastBookingId(newBooking.id);
+        existing.push(newBooking);
+        localStorage.setItem(storageKey, JSON.stringify(existing));
+      } catch (e) {
+        // ignore storage errors
+        console.error('Failed to save booking', e);
+      }
+
       // Auto close after 2 seconds
       setTimeout(() => {
         closeBookingModal();
       }, 2000);
     }, 1500);
+  };
+
+  const removeBookingFromStorage = (bookingId: string) => {
+    try {
+      const storageKey = 'myturn_bookings';
+      const raw = localStorage.getItem(storageKey);
+      const existing = raw ? JSON.parse(raw) : [];
+      const filtered = existing.filter((b: any) => b.id !== bookingId);
+      localStorage.setItem(storageKey, JSON.stringify(filtered));
+    } catch (e) {
+      console.error('Failed to remove booking', e);
+    }
   };
 
   return (
@@ -251,7 +335,6 @@ const CompaniesPage = () => {
                 placeholder-[#6e473b] dark:placeholder-[#beb5a9]
                 focus:ring-2 focus:ring-[#a78d78] focus:border-transparent
                 transition-all duration-200"
-                style={{ borderRadius: '8px' }}
               />
               <select
                 value={selectedCategory}
@@ -261,7 +344,7 @@ const CompaniesPage = () => {
                 text-[#291c0e] dark:text-[#e1d4c2] 
                 focus:ring-2 focus:ring-[#a78d78] focus:border-transparent
                 transition-all duration-200"
-                style={{ borderRadius: '8px' }}
+                aria-label="Filter category"
               >
                 {categories.map((category) => (
                   <option key={category} value={category} className="bg-white dark:bg-[#6e473b]">
@@ -282,7 +365,6 @@ const CompaniesPage = () => {
                 hover:shadow-xl transition-all duration-300 overflow-hidden
                 hover:border-[#a78d78] cursor-pointer"
                 onClick={() => openBookingModal(company)}
-                style={{ borderRadius: '12px' }}
               >
                 <div className="p-6 pb-4">
                   {/* Header */}
@@ -392,6 +474,7 @@ const CompaniesPage = () => {
                 </h2>
                 <button
                   onClick={closeBookingModal}
+                  aria-label="Close booking modal"
                   className="text-[#6e473b] dark:text-[#beb5a9] hover:text-[#291c0e] dark:hover:text-[#e1d4c2]"
                 >
                   <X className="w-6 h-6" />
@@ -409,6 +492,21 @@ const CompaniesPage = () => {
                   <p className="text-[#6e473b] dark:text-[#beb5a9] text-sm">
                     Your slot has been booked at {bookingModal.company.name}
                   </p>
+                  <div className="mt-4 flex justify-center gap-2">
+                    {lastBookingId && (
+                      <button
+                        onClick={() => {
+                          removeBookingFromStorage(lastBookingId);
+                          // close modal and clear lastBookingId
+                          setLastBookingId(null);
+                          closeBookingModal();
+                        }}
+                        className="px-4 py-2 rounded bg-red-600 text-white hover:bg-red-700"
+                      >
+                        Cancel Booking
+                      </button>
+                    )}
+                  </div>
                 </div>
               ) : (
                 <div className="p-6 space-y-4">
@@ -427,16 +525,18 @@ const CompaniesPage = () => {
 
                   {/* Service Selection */}
                   <div>
-                    <label className="block text-sm font-medium text-[#291c0e] dark:text-[#e1d4c2] mb-2">
+                    <label htmlFor="service-select" className="block text-sm font-medium text-[#291c0e] dark:text-[#e1d4c2] mb-2">
                       Select Service *
                     </label>
                     <select
+                      id="service-select"
                       value={selectedService}
                       onChange={(e) => setSelectedService(e.target.value)}
                       className="w-full p-3 border border-[#beb5a9] dark:border-[#6e473b] rounded-lg
                       bg-white dark:bg-[#6e473b]/30 
                       text-[#291c0e] dark:text-[#e1d4c2]
                       focus:ring-2 focus:ring-[#a78d78] focus:border-transparent"
+                      aria-label="Select service"
                     >
                       <option value="">Choose a service...</option>
                       {bookingModal.company.services.map((service) => (

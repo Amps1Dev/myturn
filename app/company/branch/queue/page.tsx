@@ -23,8 +23,8 @@ import {
 import Link from "next/link";
 import { CompanyLayout } from "@/components/company-layout";
 
-// Mock data for demonstration
-const mockQueues = [
+// Base queue definitions (labels/services). Counts are computed dynamically from bookings.
+const baseQueues = [
   {
     id: 1,
     name: "Customer Service",
@@ -69,8 +69,19 @@ const mockQueues = [
 
 const QueueManagement = () => {
   const [darkMode, setDarkMode] = useState(false);
-  const [queues, setQueues] = useState(mockQueues);
+  const [queues, setQueues] = useState(baseQueues);
   const [selectedTimeRange, setSelectedTimeRange] = useState("today");
+  const [branchBookings, setBranchBookings] = useState<Array<any>>([]);
+  // detect branch id: prefer cookie `myturn_branch`, fallback to hardcoded id
+  const [institutionId, setInstitutionId] = useState<string>(() => {
+    try {
+      const m = document?.cookie?.match(/(?:^|; )myturn_branch=([^;]+)/);
+      if (m) return decodeURIComponent(m[1]);
+    } catch (e) {
+      // ignore
+    }
+    return 'zanaco-bank-cairo';
+  });
 
   useEffect(() => {
     // Apply theme class to body
@@ -81,6 +92,64 @@ const QueueManagement = () => {
     }
   }, [darkMode]);
 
+  // load bookings for this branch from localStorage
+  useEffect(() => {
+    const storageKey = 'myturn_bookings';
+    const loadBookings = () => {
+      try {
+        const raw = localStorage.getItem(storageKey);
+        const all = raw ? JSON.parse(raw) : [];
+        const forBranch = all.filter((b: any) => String(b.institutionId) === String(institutionId));
+        setBranchBookings(forBranch);
+      } catch (e) {
+        setBranchBookings([]);
+      }
+    };
+    loadBookings();
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === storageKey) loadBookings();
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, [institutionId]);
+
+  const markCalled = (bookingId: string) => {
+    try {
+      const storageKey = 'myturn_bookings';
+      const raw = localStorage.getItem(storageKey);
+      const existing = raw ? JSON.parse(raw) : [];
+      const updated = existing.map((b: any) => {
+        if (String(b.id) === String(bookingId)) {
+          return { ...b, status: 'called', calledAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) };
+        }
+        return b;
+      });
+      localStorage.setItem(storageKey, JSON.stringify(updated));
+      setBranchBookings(updated.filter((b: any) => String(b.institutionId) === String(institutionId)));
+    } catch (e) {
+      console.error('Failed to mark booking called', e);
+    }
+  };
+
+  const callNext = (queueName: string) => {
+    try {
+      // find earliest booking for this branch and service that is still 'booked'
+      const pending = branchBookings
+        .filter((b: any) => (b.status === 'booked') && (b.service || '').toLowerCase().includes(queueName.split(' ')[0].toLowerCase()));
+      if (pending.length === 0) return;
+      // booking ids are 'b_<timestamp>' so pick min timestamp
+      let next = pending[0];
+      let minTs = Number((String(next.id) || '').split('_')[1] || Date.now());
+      for (const p of pending) {
+        const ts = Number((String(p.id) || '').split('_')[1] || Date.now());
+        if (ts < minTs) { minTs = ts; next = p; }
+      }
+      if (next && next.id) markCalled(next.id);
+    } catch (e) {
+      console.error('Failed to call next', e);
+    }
+  };
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'active': return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300';
@@ -90,15 +159,28 @@ const QueueManagement = () => {
     }
   };
 
-  const getTotalWaiting = () => queues.reduce((sum, queue) => sum + queue.waitingCount, 0);
-  const getTotalServed = () => queues.reduce((sum, queue) => sum + queue.totalServed, 0);
+  // Dynamic metrics derived from branchBookings
+  const getTotalWaiting = () => branchBookings.filter((b: any) => b.status === 'booked').length;
+  const getTotalServed = () => branchBookings.filter((b: any) => b.status === 'called').length;
   const getAvgWaitTime = () => {
-    const totalMinutes = queues.reduce((sum, queue) => {
-      const minutes = parseInt(queue.avgWaitTime.replace(' min', ''));
-      return sum + minutes;
-    }, 0);
-    return Math.round(totalMinutes / queues.length);
+    // best-effort: if bookings include estimatedTime in mins, average them
+    const mins = branchBookings
+      .map((b: any) => {
+        if (!b.estimatedTime) return null;
+        const m = String(b.estimatedTime).match(/(\d+)/);
+        return m ? parseInt(m[1], 10) : null;
+      })
+      .filter((v: any) => v != null) as number[];
+    if (mins.length === 0) return 0;
+    return Math.round(mins.reduce((s, v) => s + v, 0) / mins.length);
   };
+
+  // map base queues to include counts from bookings
+  const queuesWithCounts = queues.map((q) => {
+    const waiting = branchBookings.filter((b: any) => (b.service || '').toLowerCase().includes(q.name.split(' ')[0].toLowerCase())).length;
+    const called = branchBookings.filter((b: any) => (b.service || '').toLowerCase().includes(q.name.split(' ')[0].toLowerCase()) && b.status === 'called').length;
+    return { ...q, waitingCount: waiting, totalServed: called };
+  });
 
   return (
     <div className={`min-h-screen transition-colors duration-300 ${
@@ -109,13 +191,13 @@ const QueueManagement = () => {
       <CompanyLayout>
         {/* Header */}
         <div className="flex justify-between items-center mb-8">
-          <div className="flex items-center gap-3">
-            <Building2 className="h-8 w-8 text-[#6e473b]" />
+              <div className="flex items-center gap-3">
+                <Building2 className="h-8 w-8 text-[#6e473b]" />
             <div>
               <h1 className="text-3xl font-bold">Queue Management</h1>
-              <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                Monitor and manage all your company queues
-              </p>
+                  <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                    Monitor and manage queues for {institutionId}
+                  </p>
             </div>
           </div>
           
@@ -123,6 +205,7 @@ const QueueManagement = () => {
             <select 
               value={selectedTimeRange}
               onChange={(e) => setSelectedTimeRange(e.target.value)}
+              aria-label="Select time range"
               className={`px-3 py-2 rounded-lg border transition-colors ${
                 darkMode 
                   ? 'bg-[#6e473b] border-[#a78d78] text-white' 
@@ -149,7 +232,7 @@ const QueueManagement = () => {
 
         {/* Stats Overview */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-          <Card className={`${
+            <Card className={`$${
             darkMode 
               ? 'bg-[#6e473b] border-[#a78d78] text-white' 
               : 'bg-white border-[#beb5a9]'
@@ -211,7 +294,7 @@ const QueueManagement = () => {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
-                {queues.filter(q => q.status === 'active').length}
+                {queuesWithCounts.filter(q => q.status === 'active').length}
               </div>
               <p className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
                 Out of {queues.length} total
@@ -248,7 +331,7 @@ const QueueManagement = () => {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {queues.map((queue) => (
+              {queuesWithCounts.map((queue) => (
                 <div 
                   key={queue.id}
                   className={`p-4 rounded-lg border transition-colors ${
@@ -278,36 +361,36 @@ const QueueManagement = () => {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-4">
+                    <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-4">
                     <div>
                       <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
                         Current Number
                       </p>
-                      <p className="text-xl font-bold text-[#a78d78]">#{queue.currentNumber}</p>
+                        <p className="text-xl font-bold text-[#a78d78]">#{queue.currentNumber || '-'}</p>
                     </div>
                     <div>
                       <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
                         Waiting
                       </p>
-                      <p className="text-xl font-bold">{queue.waitingCount}</p>
+                        <p className="text-xl font-bold">{queue.waitingCount}</p>
                     </div>
                     <div>
                       <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
                         Served Today
                       </p>
-                      <p className="text-xl font-bold">{queue.totalServed}</p>
+                        <p className="text-xl font-bold">{queue.totalServed}</p>
                     </div>
                     <div>
                       <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
                         Avg Wait
                       </p>
-                      <p className="text-xl font-bold">{queue.avgWaitTime}</p>
+                        <p className="text-xl font-bold">{queue.avgWaitTime || `${getAvgWaitTime()} min`}</p>
                     </div>
                     <div>
                       <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
                         Last Updated
                       </p>
-                      <p className="text-sm">{queue.lastUpdated}</p>
+                        <p className="text-sm">{queue.lastUpdated || '-'}</p>
                     </div>
                   </div>
 
@@ -353,6 +436,10 @@ const QueueManagement = () => {
                             ? 'bg-[#a78d78] hover:bg-[#6e473b]' 
                             : 'bg-[#6e473b] hover:bg-[#291c0e]'
                         } text-white`}
+                        onClick={() => {
+                          // call the next booking for this queue
+                          callNext(queue.name);
+                        }}
                       >
                         Call Next
                       </Button>

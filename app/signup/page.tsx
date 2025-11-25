@@ -12,6 +12,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Users, UserCheck, Building2, ArrowLeft, Eye, EyeOff } from "lucide-react";
 import { toast } from "sonner";
+import { supabase } from "../../utils/supabase/client"; // Add this import
 
 export default function SignupPage() {
   const [formData, setFormData] = useState({
@@ -41,6 +42,7 @@ export default function SignupPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    // Validation
     if (!formData.firstName || !formData.lastName || !formData.email || !formData.password) {
       toast.error("Please fill in all required fields");
       return;
@@ -51,24 +53,87 @@ export default function SignupPage() {
       return;
     }
 
+    if (formData.password.length < 6) {
+      toast.error("Password must be at least 6 characters");
+      return;
+    }
+
     if (!formData.agreeToTerms) {
       toast.error("Please agree to the terms and conditions");
       return;
     }
 
+    // Company-specific validation
+    if (formData.userType === 'company' && !formData.companyName) {
+      toast.error("Please enter your company name");
+      return;
+    }
+
     setIsLoading(true);
     
-    // Simulate API call
-    setTimeout(() => {
-      toast.success(`Account created successfully! Welcome to MyTurn!`);
+    try {
+      // 1. Sign up the user with Supabase Auth
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email: formData.email,
+        password: formData.password,
+        options: {
+          data: {
+            first_name: formData.firstName,
+            last_name: formData.lastName,
+            phone: formData.phone,
+            user_type: formData.userType,
+          }
+        }
+      });
+
+      if (authError) {
+        toast.error(authError.message);
+        setIsLoading(false);
+        return;
+      }
+
+      if (!authData.user) {
+        toast.error("Failed to create account");
+        setIsLoading(false);
+        return;
+      }
+
+      // 2. Insert profile data into profiles table
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .insert({
+          id: authData.user.id,
+          email: formData.email,
+          first_name: formData.firstName,
+          last_name: formData.lastName,
+          phone: formData.phone,
+          user_type: formData.userType,
+          company_name: formData.userType === 'company' ? formData.companyName : null,
+          business_type: formData.userType === 'company' ? formData.businessType : null,
+        });
+
+      if (profileError) {
+        console.error('Profile creation error:', profileError);
+        toast.error("Account created but profile setup failed. Please contact support.");
+        setIsLoading(false);
+        return;
+      }
+
+      toast.success("Account created successfully! Please check your email to verify your account.");
       
+      // Redirect based on user type
       if (formData.userType === 'client') {
         router.push('/client/dashboard');
       } else {
         router.push('/company/dashboard');
       }
+      
+    } catch (error) {
+      console.error('Signup error:', error);
+      toast.error("An unexpected error occurred. Please try again.");
+    } finally {
       setIsLoading(false);
-    }, 1500);
+    }
   };
 
   return (

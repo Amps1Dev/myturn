@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { 
   Clock, 
   MapPin, 
@@ -202,6 +202,44 @@ const MyQueueSlotsPage = () => {
     ? queueSlots.filter(slot => slot.status === "Active" || slot.status === "Called")
     : historySlots;
 
+  // stateful slots that can be updated (cancelled)
+  const [slotsState, setSlotsState] = useState<QueueSlot[]>(currentSlots);
+
+  useEffect(() => {
+    // load bookings from localStorage if any
+    try {
+      const raw = localStorage.getItem('myturn_bookings');
+      if (raw) {
+        const bookings = JSON.parse(raw);
+        // map bookings to QueueSlot shape
+        const mapped: QueueSlot[] = bookings.map((b: any, idx: number) => ({
+          id: b.id,
+          companyName: b.institutionName || 'Unknown',
+          companyLocation: '',
+          service: b.service || 'Service',
+          reason: b.reason || '',
+          bookedAt: new Date().toISOString(),
+          estimatedTime: b.estimatedTime || '',
+          position: b.position || (idx + 1),
+          totalInQueue: (b.position || (idx + 1)) + 5,
+          status: b.status === 'booked' ? 'Active' : 'Active',
+          companyPhone: '',
+          rating: 4.0
+        }));
+        if (mapped.length > 0) setSlotsState(mapped);
+      }
+    } catch (e) {
+      // ignore
+    }
+  }, []);
+
+  useEffect(() => {
+    // when activeTab or source data changes, reset slotsState accordingly
+    if (!localStorage.getItem('myturn_bookings')) {
+      setSlotsState(currentSlots);
+    }
+  }, [activeTab]);
+
   return (
     <ClientLayout>
       <div className="min-h-screen bg-[#e1d4c2] dark:bg-[#291c0e] transition-colors duration-300">
@@ -242,7 +280,7 @@ const MyQueueSlotsPage = () => {
 
           {/* Slots Grid */}
           <div className="space-y-6">
-            {currentSlots.length === 0 ? (
+            {slotsState.length === 0 ? (
               <div className="text-center py-12">
                 <div className="w-16 h-16 bg-[#beb5a9]/30 dark:bg-[#6e473b]/30 rounded-full flex items-center justify-center mx-auto mb-4">
                   <Users className="w-8 h-8 text-[#6e473b] dark:text-[#beb5a9]" />
@@ -258,11 +296,10 @@ const MyQueueSlotsPage = () => {
                 </p>
               </div>
             ) : (
-              currentSlots.map((slot) => (
+              slotsState.map((slot) => (
                 <div
                   key={slot.id}
-                  className="bg-white dark:bg-[#6e473b]/40 rounded-xl border border-[#beb5a9] dark:border-[#6e473b] shadow-lg hover:shadow-xl transition-all duration-300"
-                  style={{ borderRadius: '16px' }}
+                  className="bg-white dark:bg-[#6e473b]/40 rounded-xl border border-[#beb5a9] dark:border-[#6e473b] shadow-lg hover:shadow-xl transition-all duration-300 rounded-[16px]"
                 >
                   {/* Card Header */}
                   <div className="p-6 pb-4">
@@ -362,6 +399,33 @@ const MyQueueSlotsPage = () => {
                     </div>
                   )}
 
+                  {/* Cancel button for any active slot */}
+                  {activeTab === "active" && (
+                    <div className="px-6 pb-6">
+                      <div className="flex justify-end">
+                        <button
+                          onClick={() => {
+                            try {
+                              const storageKey = 'myturn_bookings';
+                              const raw = localStorage.getItem(storageKey);
+                              const existing = raw ? JSON.parse(raw) : [];
+                              // remove by id (works for both numeric and string ids)
+                              const filtered = existing.filter((b: any) => String(b.id) !== String(slot.id));
+                              localStorage.setItem(storageKey, JSON.stringify(filtered));
+                            } catch (e) {
+                              // ignore
+                            }
+                            // remove from local state
+                            setSlotsState(prev => prev.filter(s => String(s.id) !== String(slot.id)));
+                          }}
+                          className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700"
+                        >
+                          Cancel Slot
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
                   {slot.status === "Called" && (
                     <div className="px-6 pb-6">
                       <div className="bg-green-100 dark:bg-green-900/30 border border-green-200 dark:border-green-800 rounded-lg p-4 flex items-center">
@@ -399,6 +463,7 @@ const MyQueueSlotsPage = () => {
                 </div>
                 <button
                   onClick={closeGiftModal}
+                  aria-label="Close gift modal"
                   className="text-[#6e473b] dark:text-[#beb5a9] hover:text-[#291c0e] dark:hover:text-[#e1d4c2]"
                 >
                   <X className="w-6 h-6" />

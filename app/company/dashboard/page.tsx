@@ -42,24 +42,104 @@ export default function CompanyDashboard() {
     peakHour: "11:00 AM"
   };
 
-  const recentActivity = [
-    { id: 1, customer: "John M.", action: "Joined queue", time: "2 mins ago", position: 18 },
-    { id: 2, customer: "Sarah K.", action: "Completed service", time: "5 mins ago", position: null },
-    { id: 3, customer: "Mike R.", action: "Joined queue", time: "8 mins ago", position: 17 },
-    { id: 4, customer: "Lisa P.", action: "Left queue", time: "12 mins ago", position: null },
-  ];
+  const institutionId = 'zanaco-bank-cairo'; // branch identifier used by bookings
+  const [branchBookings, setBranchBookings] = useState<Array<any>>([]);
+  const [userProfile, setUserProfile] = useState<any | null>(null);
 
-  const upcomingAppointments = [
-    { id: 1, customer: "David L.", service: "Account Opening", time: "2:30 PM", status: "confirmed" },
-    { id: 2, customer: "Emma W.", service: "Loan Application", time: "3:00 PM", status: "pending" },
-    { id: 3, customer: "James T.", service: "Money Transfer", time: "3:30 PM", status: "confirmed" },
-  ];
+  useEffect(() => {
+    const storageKey = 'myturn_bookings';
+    const loadBookings = () => {
+      try {
+        const raw = localStorage.getItem(storageKey);
+        const all = raw ? JSON.parse(raw) : [];
+        const forBranch = all.filter((b: any) => String(b.institutionId) === String(institutionId));
+        setBranchBookings(forBranch);
+      } catch (e) {
+        setBranchBookings([]);
+      }
+    };
+    loadBookings();
+    // also try to load the signed-in client profile
+    try {
+      // prefer cookie
+      const match = document.cookie.match(/(?:^|; )myturn_user=([^;]+)/);
+      if (match) {
+        setUserProfile(JSON.parse(decodeURIComponent(match[1])));
+      } else {
+        const rawProfile = localStorage.getItem('myturn_profile');
+        if (rawProfile) setUserProfile(JSON.parse(rawProfile));
+      }
+    } catch (e) {
+      // ignore
+    }
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === storageKey) loadBookings();
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, []);
+
+  const cancelBooking = (bookingId: string) => {
+    try {
+      const storageKey = 'myturn_bookings';
+      const raw = localStorage.getItem(storageKey);
+      const existing = raw ? JSON.parse(raw) : [];
+      const filtered = existing.filter((b: any) => String(b.id) !== String(bookingId));
+      localStorage.setItem(storageKey, JSON.stringify(filtered));
+      setBranchBookings((prev) => prev.filter(b => String(b.id) !== String(bookingId)));
+    } catch (e) {
+      console.error('Failed to cancel booking', e);
+    }
+  };
+
+  const markCalled = (bookingId: string) => {
+    try {
+      const storageKey = 'myturn_bookings';
+      const raw = localStorage.getItem(storageKey);
+      const existing = raw ? JSON.parse(raw) : [];
+      const updated = existing.map((b: any) => {
+        if (String(b.id) === String(bookingId)) {
+          return { ...b, status: 'called', calledAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) };
+        }
+        return b;
+      });
+      localStorage.setItem(storageKey, JSON.stringify(updated));
+      setBranchBookings(updated.filter((b: any) => String(b.institutionId) === String(institutionId)));
+    } catch (e) {
+      console.error('Failed to mark booking called', e);
+    }
+  };
+
+  // Only count bookings for the signed-in user for this branch (no fake numbers)
+  const branchBookingsForUser = userProfile
+    ? branchBookings.filter((b: any) => b.user && (b.user.email === userProfile.email || b.user.email === userProfile?.email))
+    : [];
+
+  const dynamicCurrentQueue = branchBookingsForUser.length;
+  const dynamicTotalCustomers = branchBookingsForUser.length;
+
+  // derive recent activity and upcoming appointments from the user's bookings only
+  const recentActivity = branchBookingsForUser.map((b: any, i: number) => ({
+    id: b.id || i,
+    customer: b.user?.firstName ? `${b.user.firstName} ${b.user.lastName?.charAt(0)}.` : (b.user?.email || 'You'),
+    action: b.status === 'booked' ? 'Joined queue' : b.status || 'Booked',
+    time: b.joinedAt || '-',
+    position: b.position || null,
+  }));
+
+  const upcomingAppointments = branchBookingsForUser.map((b: any, i: number) => ({
+    id: b.id || i,
+    customer: b.user?.firstName ? `${b.user.firstName} ${b.user.lastName?.charAt(0)}.` : (b.user?.email || 'You'),
+    service: b.service || 'Service',
+    time: b.joinedAt || '-',
+    status: b.status === 'booked' ? 'confirmed' : (b.status || 'pending'),
+  }));
 
   return (
     <CompanyLayout>
       <div className="space-y-8">
         {/* Welcome Section */}
-        <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold">Welcome back, Zanaco Bank!</h1>
             <p className="text-muted-foreground mt-1">
@@ -71,6 +151,26 @@ export default function CompanyDashboard() {
               })} • Cairo Road Branch
             </p>
           </div>
+            {branchBookingsForUser.length > 0 && (
+              <div className="ml-4">
+                <div className="bg-blue-50 dark:bg-blue-900/20 px-3 py-2 rounded-md">
+                  <div className="text-sm font-medium">You have {branchBookingsForUser.length} booking{branchBookingsForUser.length>1?'s':''} at this branch</div>
+                  <div className="mt-2 space-y-1 text-sm">
+                    {branchBookingsForUser.map((b) => (
+                      <div key={b.id} className="flex items-center justify-between gap-2">
+                        <div className="truncate">{b.institutionName || 'Booking'} • {b.joinedAt || ''} {b.status === 'called' && <span className="text-xs text-blue-600 ml-2">(Called)</span>}</div>
+                        <div className="flex items-center gap-2">
+                          {b.status !== 'called' && (
+                            <button onClick={() => markCalled(b.id)} className="text-sm text-primary-600 hover:underline">Mark Called</button>
+                          )}
+                          <button onClick={() => cancelBooking(b.id)} className="text-sm text-red-600 hover:underline">Cancel</button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
           <div className="flex items-center space-x-3">
             <Badge variant="secondary" className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
               <div className="w-2 h-2 bg-green-500 rounded-full mr-2"></div>
@@ -93,7 +193,7 @@ export default function CompanyDashboard() {
               <Users className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-primary">{todayStats.currentQueue}</div>
+              <div className="text-2xl font-bold text-primary">{dynamicCurrentQueue}</div>
               <p className="text-xs text-muted-foreground">
                 People waiting
               </p>
@@ -132,7 +232,7 @@ export default function CompanyDashboard() {
               <TrendingUp className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{todayStats.totalCustomers}</div>
+              <div className="text-2xl font-bold">{dynamicTotalCustomers}</div>
               <p className="text-xs text-muted-foreground">
                 Peak at {todayStats.peakHour}
               </p>
@@ -177,14 +277,14 @@ export default function CompanyDashboard() {
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-medium">Queue Progress</span>
                   <span className="text-sm text-muted-foreground">
-                    {todayStats.completedToday} of {todayStats.totalCustomers} completed
+                    {todayStats.completedToday} of {dynamicTotalCustomers} completed
                   </span>
                 </div>
                 <Progress value={85} className="h-3" />
                 
                 <div className="grid grid-cols-2 gap-4 pt-4">
                   <div className="text-center p-4 bg-muted/50 rounded-lg">
-                    <div className="text-2xl font-bold text-primary">{todayStats.currentQueue}</div>
+                    <div className="text-2xl font-bold text-primary">{dynamicCurrentQueue}</div>
                     <p className="text-sm text-muted-foreground">In Queue</p>
                   </div>
                   <div className="text-center p-4 bg-muted/50 rounded-lg">
