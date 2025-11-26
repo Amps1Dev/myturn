@@ -1,5 +1,5 @@
 "use client";
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   User, 
   Mail, 
@@ -10,375 +10,297 @@ import {
   Shield, 
   Bell, 
   Heart, 
-  Baby,
   Save,
   Edit3,
-  Eye,
-  EyeOff,
   Check,
-  X
+  Loader2
 } from 'lucide-react';
-
 import { ClientLayout } from '@/components/client-layout';
+import { supabase } from '@/utils/supabase/client';
+import { toast } from 'sonner';
 
 interface ProfileState {
+  id: string;
   firstName: string;
   lastName: string;
   email: string;
   phone: string;
   dateOfBirth: string;
-  address: string;
-  city: string;
-  zipCode: string;
-  emergencyContact: string;
-  emergencyPhone: string;
   isPregnant: boolean;
-  age: number;
-  hasSpecialNeeds: boolean;
-  medicalNotes: string;
-  preferredLanguage: string;
-}
-
-interface NotificationSettings {
-  queueUpdates: boolean;
-  appointments: boolean;
-  promotions: boolean;
-  emergencies: boolean;
-}
-
-interface PrivacySettings {
-  shareLocation: boolean;
-  showProfile: boolean;
-  allowNotifications: boolean;
-}
-
-interface ProfileSectionProps {
-  title: string;
-  icon: React.ComponentType<{ className?: string }>;
-  children: React.ReactNode;
-}
-
-interface InputFieldProps {
-  label: string;
-  type?: string;
-  value: string | number;
-  onChange: (value: string) => void;
-  placeholder?: string;
-  disabled?: boolean;
-  multiline?: boolean;
-}
-
-interface ToggleSwitchProps {
-  checked: boolean;
-  onChange: () => void;
-  label: string;
-  description?: string;
+  hasDisability: boolean;
+  role: string;
 }
 
 const ClientProfileEdit: React.FC = () => {
   const [isEditing, setIsEditing] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   
   const [profile, setProfile] = useState<ProfileState>({
-    firstName: 'Samuel',
-    lastName: 'Simutwe',
-    email: 'samuelsimutwe@email.com',
-    phone: '07722321414',
-    dateOfBirth: '2001-08-19',
-    address: 'lusaka, chibombo',
-    city: 'lusaka',
-    zipCode: '10001',
-    emergencyContact: 'jane',
-    emergencyPhone: '+260 0772321414',
+    id: '',
+    firstName: '',
+    lastName: '',
+    email: '',
+    phone: '',
+    dateOfBirth: '',
     isPregnant: false,
-    age: 34,
-    hasSpecialNeeds: false,
-    medicalNotes: '',
-    preferredLanguage: 'English'
+    hasDisability: false,
+    role: 'client'
   });
 
-  const [notifications, setNotifications] = useState<NotificationSettings>({
-    queueUpdates: true,
-    appointments: true,
-    promotions: false,
-    emergencies: true
-  });
-
-  const [privacy, setPrivacy] = useState<PrivacySettings>({
-    shareLocation: true,
-    showProfile: true,
-    allowNotifications: true
-  });
-
-  const handleSave = (): void => {
-    setSaved(true);
-    setIsEditing(false);
-    try {
-      localStorage.setItem('myturn_profile', JSON.stringify(profile));
-    } catch (e) {
-      // ignore storage errors
-      console.error('Failed to save profile to storage', e);
-    }
-    try {
-      // set a cookie with basic user info so other pages can identify the signed-in user
-      const cookieVal = encodeURIComponent(JSON.stringify({
-        email: profile.email,
-        firstName: profile.firstName,
-        lastName: profile.lastName,
-      }));
-      // cookie valid for 1 year
-      document.cookie = `myturn_user=${cookieVal}; path=/; max-age=${60 * 60 * 24 * 365}`;
-    } catch (e) {
-      console.error('Failed to set user cookie', e);
-    }
-    setTimeout(() => setSaved(false), 2000);
-  };
-
-  // load profile from localStorage if present
-  React.useEffect(() => {
-    try {
-      const raw = localStorage.getItem('myturn_profile');
-      if (raw) {
-        const stored = JSON.parse(raw);
-        setProfile(prev => ({ ...prev, ...stored }));
-      }
-    } catch (e) {
-      // ignore parse errors
-      console.error('Failed to load profile from storage', e);
-    }
-    // if no localStorage profile, try loading from cookie
-    try {
-      if (!localStorage.getItem('myturn_profile')) {
-        const match = document.cookie.match(/(?:^|; )myturn_user=([^;]+)/);
-        if (match) {
-          const parsed = JSON.parse(decodeURIComponent(match[1]));
-          setProfile(prev => ({ ...prev, ...parsed }));
+  // Load profile from Supabase
+  useEffect(() => {
+    const loadProfile = async () => {
+      setLoading(true);
+      
+      try {
+        // Get current user
+        const { data: { user }, error: authError } = await supabase.auth.getUser();
+        
+        if (authError || !user) {
+          toast.error("Please sign in to view your profile");
+          setLoading(false);
+          return;
         }
+
+        // Fetch profile from database
+        const { data: profileData, error: profileError } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', user.id)
+          .single();
+
+        if (profileError) {
+          console.error('Profile fetch error:', profileError);
+          toast.error("Failed to load profile");
+          setLoading(false);
+          return;
+        }
+
+        if (profileData) {
+          setProfile({
+            id: profileData.id,
+            firstName: profileData.first_name || '',
+            lastName: profileData.last_name || '',
+            email: profileData.email || '',
+            phone: profileData.phone || '',
+            dateOfBirth: profileData.date_of_birth || '',
+            isPregnant: profileData.is_pregnant || false,
+            hasDisability: profileData.has_disability || false,
+            role: profileData.role || 'client'
+          });
+        }
+      } catch (error) {
+        console.error('Error loading profile:', error);
+        toast.error("An error occurred while loading your profile");
+      } finally {
+        setLoading(false);
       }
-    } catch (e) {
-      // ignore cookie parse errors
-    }
+    };
+
+    loadProfile();
   }, []);
 
-  const ProfileSection: React.FC<ProfileSectionProps> = ({ title, icon: Icon, children }) => (
-    <div className="bg-white dark:bg-[#291c0e] rounded-lg shadow-lg p-6 border border-[#beb5a9] dark:border-[#6e473b] transition-colors duration-200">
-      <div className="flex items-center gap-3 mb-6">
-        <div className="bg-[#a78d78] dark:bg-[#6e473b] p-2 rounded-xl">
-          <Icon className="w-5 h-5 text-white" />
-        </div>
-        <h3 className="text-lg font-semibold text-[#291c0e] dark:text-[#e1d4c2] font-sans">
-          {title}
-        </h3>
-      </div>
-      {children}
-    </div>
-  );
-
-  const EditableText: React.FC<{ 
-    value: string; 
-    onChange: (value: string) => void; 
-    disabled: boolean;
-    className?: string;
-    multiline?: boolean;
-    placeholder?: string;
-  }> = ({ value, onChange, disabled, className = "", multiline = false, placeholder }) => {
-    const [localValue, setLocalValue] = useState(value);
-
-    React.useEffect(() => {
-      setLocalValue(value);
-    }, [value]);
-
-    const handleBlur = () => {
-      if (localValue !== value) {
-        onChange(localValue);
-      }
-    };
-
-    const handleKeyDown = (e: React.KeyboardEvent) => {
-      if (e.key === 'Enter' && !multiline) {
-        e.preventDefault();
-        (e.target as HTMLElement).blur();
-      }
-      if (e.key === 'Enter' && e.ctrlKey && multiline) {
-        e.preventDefault();
-        (e.target as HTMLElement).blur();
-      }
-      if (e.key === 'Escape') {
-        setLocalValue(value);
-        (e.target as HTMLElement).blur();
-      }
-    };
-
-    const baseClassName = `w-full p-3 border border-[#beb5a9] dark:border-[#6e473b] bg-[#e1d4c2] dark:bg-[#6e473b] text-[#291c0e] dark:text-[#e1d4c2] placeholder-[#6e473b] dark:placeholder-[#beb5a9] focus:ring-2 focus:ring-[#a78d78] focus:border-transparent transition-all duration-200 font-sans disabled:opacity-60 ${className}`;
-
-    if (disabled) {
-      return (
-        <div className={`${baseClassName} cursor-not-allowed bg-[#beb5a9] dark:bg-[#291c0e]`}>
-          {value || placeholder}
-        </div>
-      );
+  const handleSave = async () => {
+    if (!profile.id) {
+      toast.error("No user ID found");
+      return;
     }
 
-    if (multiline) {
-      return (
-        <textarea
-          value={localValue}
-          onChange={(e) => setLocalValue(e.target.value)}
-          onBlur={handleBlur}
-          onKeyDown={handleKeyDown}
-          placeholder={placeholder}
-          rows={3}
-          className={`${baseClassName} resize-none`}
-        />
-      );
-    }
+    setSaving(true);
 
-    return (
-      <input
-        type="text"
-        value={localValue}
-        onChange={(e) => setLocalValue(e.target.value)}
-        onBlur={handleBlur}
-        onKeyDown={handleKeyDown}
-        placeholder={placeholder}
-        className={baseClassName}
-      />
-    );
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          first_name: profile.firstName,
+          last_name: profile.lastName,
+          phone: profile.phone,
+          date_of_birth: profile.dateOfBirth || null,
+          is_pregnant: profile.isPregnant,
+          has_disability: profile.hasDisability,
+        })
+        .eq('id', profile.id);
+
+      if (error) {
+        console.error('Update error:', error);
+        toast.error("Failed to save profile");
+        setSaving(false);
+        return;
+      }
+
+      setSaved(true);
+      setIsEditing(false);
+      toast.success("Profile saved successfully!");
+      
+      setTimeout(() => setSaved(false), 2000);
+    } catch (error) {
+      console.error('Save error:', error);
+      toast.error("An error occurred while saving");
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const InputField: React.FC<InputFieldProps> = ({ 
-    label, 
-    type = "text", 
-    value, 
-    onChange, 
-    placeholder, 
-    disabled = false,
-    multiline = false 
-  }) => (
+  const InputField: React.FC<{ 
+    label: string;
+    type?: string;
+    value: string | number;
+    onChange: (value: string) => void;
+    placeholder?: string;
+    disabled?: boolean;
+  }> = ({ label, type = "text", value, onChange, placeholder, disabled = false }) => (
     <div className="space-y-2">
-      <label className="block text-sm font-medium text-[#291c0e] dark:text-[#e1d4c2] font-sans">
+      <label className="block text-sm font-medium text-[#291c0e] dark:text-[#e1d4c2]">
         {label}
       </label>
-      {type === 'date' || type === 'number' ? (
-        <input
-          type={type}
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder={placeholder}
-          disabled={disabled || !isEditing}
-          className="w-full p-3 border border-[#beb5a9] dark:border-[#6e473b] bg-[#e1d4c2] dark:bg-[#6e473b] text-[#291c0e] dark:text-[#e1d4c2] placeholder-[#6e473b] dark:placeholder-[#beb5a9] focus:ring-2 focus:ring-[#a78d78] focus:border-transparent transition-all duration-200 font-sans disabled:opacity-60"
-        />
-      ) : (
-        <EditableText
-          value={String(value)}
-          onChange={onChange}
-          disabled={disabled || !isEditing}
-          multiline={multiline}
-          placeholder={placeholder}
-        />
-      )}
+      <input
+        type={type}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        disabled={disabled || !isEditing}
+        className="w-full p-3 border border-[#beb5a9] dark:border-[#6e473b] rounded-lg
+        bg-white dark:bg-[#6e473b]/30 text-[#291c0e] dark:text-[#e1d4c2]
+        disabled:opacity-60 disabled:cursor-not-allowed
+        focus:ring-2 focus:ring-[#a78d78] focus:border-transparent"
+      />
     </div>
   );
 
-  const ToggleSwitch: React.FC<ToggleSwitchProps> = ({ checked, onChange, label, description }) => (
+  const ToggleSwitch: React.FC<{
+    checked: boolean;
+    onChange: () => void;
+    label: string;
+    description?: string;
+  }> = ({ checked, onChange, label, description }) => (
     <div className="flex items-center justify-between py-3">
       <div>
-        <p className="text-sm font-medium text-[#291c0e] dark:text-[#e1d4c2] font-sans">
+        <p className="text-sm font-medium text-[#291c0e] dark:text-[#e1d4c2]">
           {label}
         </p>
         {description && (
-          <p className="text-xs text-[#6e473b] dark:text-[#beb5a9] font-sans">
+          <p className="text-xs text-[#6e473b] dark:text-[#beb5a9]">
             {description}
           </p>
         )}
       </div>
-      {checked ? (
-        <button
-          onClick={onChange}
-          role="switch"
-          aria-checked="true"
-          aria-label={`Toggle ${label}`}
-          className="relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200 bg-[#a78d78]"
-        >
-          <span className="inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-200 translate-x-6" />
-        </button>
-      ) : (
-        <button
-          onClick={onChange}
-          role="switch"
-          aria-checked="false"
-          aria-label={`Toggle ${label}`}
-          className="relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200 bg-[#beb5a9] dark:bg-[#6e473b]"
-        >
-          <span className="inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-200 translate-x-1" />
-        </button>
-      )}
+      <button
+        onClick={isEditing ? onChange : undefined}
+        disabled={!isEditing}
+        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200 
+          ${checked ? 'bg-[#a78d78]' : 'bg-[#beb5a9] dark:bg-[#6e473b]'}
+          ${!isEditing && 'opacity-60 cursor-not-allowed'}`}
+      >
+        <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-200 
+          ${checked ? 'translate-x-6' : 'translate-x-1'}`} />
+      </button>
     </div>
   );
 
+  if (loading) {
+    return (
+      <ClientLayout>
+        <div className="flex items-center justify-center h-screen bg-[#e1d4c2] dark:bg-[#291c0e]">
+          <Loader2 className="h-8 w-8 animate-spin text-[#a78d78]" />
+        </div>
+      </ClientLayout>
+    );
+  }
+
   return (
     <ClientLayout>
-      <div className="min-h-screen bg-[#e1d4c2] dark:bg-[#291c0e] transition-colors duration-300">
+      <div className="min-h-screen bg-[#e1d4c2] dark:bg-[#291c0e]">
         <div className="container mx-auto px-4 py-8 max-w-4xl">
           {/* Header */}
           <div className="flex items-center justify-between mb-8">
             <div>
-              <h1 className="text-3xl font-bold text-[#291c0e] dark:text-[#e1d4c2] font-sans">
+              <h1 className="text-3xl font-bold text-[#291c0e] dark:text-[#e1d4c2]">
                 My Profile
               </h1>
-              <p className="text-[#6e473b] dark:text-[#beb5a9] font-sans">
+              <p className="text-[#6e473b] dark:text-[#beb5a9]">
                 Manage your personal information and preferences
               </p>
             </div>
             <div className="flex gap-3">
               {saved && (
-                <div className="flex items-center gap-2 bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400 px-4 py-2 rounded-xl border border-green-200 dark:border-green-800">
+                <div className="flex items-center gap-2 bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400 px-4 py-2 rounded-xl">
                   <Check className="w-4 h-4" />
-                  <span className="text-sm font-medium font-sans">Saved!</span>
+                  <span className="text-sm font-medium">Saved!</span>
                 </div>
               )}
-              <button
-                onClick={() => setIsEditing(!isEditing)}
-                className="flex items-center gap-2 bg-[#6e473b] dark:bg-[#a78d78] text-white px-6 py-3 rounded-xl hover:bg-[#a78d78] dark:hover:bg-[#6e473b] transition-all duration-200 font-sans"
-              >
-                <Edit3 className="w-4 h-4" />
-                {isEditing ? 'Cancel' : 'Edit Profile'}
-              </button>
+              {!isEditing ? (
+                <button
+                  onClick={() => setIsEditing(true)}
+                  className="flex items-center gap-2 bg-[#6e473b] text-white px-6 py-3 rounded-xl hover:bg-[#a78d78]"
+                >
+                  <Edit3 className="w-4 h-4" />
+                  Edit Profile
+                </button>
+              ) : (
+                <>
+                  <button
+                    onClick={() => setIsEditing(false)}
+                    className="flex items-center gap-2 bg-gray-500 text-white px-6 py-3 rounded-xl hover:bg-gray-600"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleSave}
+                    disabled={saving}
+                    className="flex items-center gap-2 bg-[#6e473b] text-white px-6 py-3 rounded-xl hover:bg-[#a78d78] disabled:opacity-60"
+                  >
+                    {saving ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Saving...
+                      </>
+                    ) : (
+                      <>
+                        <Save className="w-4 h-4" />
+                        Save Changes
+                      </>
+                    )}
+                  </button>
+                </>
+              )}
             </div>
           </div>
 
           {/* Profile Picture Section */}
-          <ProfileSection title="Profile Picture" icon={Camera}>
+          <div className="bg-white dark:bg-[#291c0e] rounded-lg shadow-lg p-6 border border-[#beb5a9] dark:border-[#6e473b] mb-6">
             <div className="flex items-center gap-6">
               <div className="relative">
-                <div className="w-24 h-24 bg-[#a78d78] dark:bg-[#6e473b] rounded-full flex items-center justify-center">
+                <div className="w-24 h-24 bg-[#a78d78] rounded-full flex items-center justify-center">
                   <User className="w-12 h-12 text-white" />
                 </div>
-                {isEditing && (
-                  <button aria-label="Upload profile picture" className="absolute -bottom-2 -right-2 bg-[#6e473b] dark:bg-[#a78d78] text-white p-2 rounded-full hover:bg-[#a78d78] dark:hover:bg-[#6e473b] transition-colors">
-                    <Camera className="w-4 h-4" />
-                  </button>
-                )}
               </div>
               <div>
-                <h4 className="text-lg font-semibold text-[#291c0e] dark:text-[#e1d4c2] font-sans">
+                <h4 className="text-lg font-semibold text-[#291c0e] dark:text-[#e1d4c2]">
                   {profile.firstName} {profile.lastName}
                 </h4>
-                <p className="text-[#6e473b] dark:text-[#beb5a9] font-sans">
-                  Member since January 2024
+                <p className="text-[#6e473b] dark:text-[#beb5a9]">
+                  {profile.email}
                 </p>
-                {isEditing && (
-                  <button className="text-sm text-[#a78d78] hover:underline mt-1 font-sans">
-                    Upload new photo
-                  </button>
-                )}
+                <span className="inline-block mt-2 px-3 py-1 bg-[#a78d78] text-white text-xs rounded-full">
+                  {profile.role}
+                </span>
               </div>
             </div>
-          </ProfileSection>
+          </div>
 
-          <div className="grid md:grid-cols-2 gap-6 mt-6">
+          <div className="grid md:grid-cols-2 gap-6">
             {/* Personal Information */}
-            <ProfileSection title="Personal Information" icon={User}>
+            <div className="bg-white dark:bg-[#291c0e] rounded-lg shadow-lg p-6 border border-[#beb5a9] dark:border-[#6e473b]">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="bg-[#a78d78] p-2 rounded-xl">
+                  <User className="w-5 h-5 text-white" />
+                </div>
+                <h3 className="text-lg font-semibold text-[#291c0e] dark:text-[#e1d4c2]">
+                  Personal Information
+                </h3>
+              </div>
               <div className="space-y-4">
                 <InputField
                   label="First Name"
@@ -396,183 +318,67 @@ const ClientProfileEdit: React.FC = () => {
                   value={profile.dateOfBirth}
                   onChange={(value) => setProfile({...profile, dateOfBirth: value})}
                 />
-                <InputField
-                  label="Age"
-                  type="number"
-                  value={profile.age}
-                  onChange={(value) => setProfile({...profile, age: parseInt(value) || 0})}
-                />
               </div>
-            </ProfileSection>
+            </div>
 
             {/* Contact Information */}
-            <ProfileSection title="Contact Information" icon={Mail}>
+            <div className="bg-white dark:bg-[#291c0e] rounded-lg shadow-lg p-6 border border-[#beb5a9] dark:border-[#6e473b]">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="bg-[#a78d78] p-2 rounded-xl">
+                  <Mail className="w-5 h-5 text-white" />
+                </div>
+                <h3 className="text-lg font-semibold text-[#291c0e] dark:text-[#e1d4c2]">
+                  Contact Information
+                </h3>
+              </div>
               <div className="space-y-4">
                 <InputField
                   label="Email Address"
                   type="email"
                   value={profile.email}
                   onChange={(value) => setProfile({...profile, email: value})}
+                  disabled={true}
                 />
                 <InputField
                   label="Phone Number"
                   type="tel"
                   value={profile.phone}
                   onChange={(value) => setProfile({...profile, phone: value})}
-                />
-                <InputField
-                  label="Emergency Contact"
-                  value={profile.emergencyContact}
-                  onChange={(value) => setProfile({...profile, emergencyContact: value})}
-                />
-                <InputField
-                  label="Emergency Phone"
-                  type="tel"
-                  value={profile.emergencyPhone}
-                  onChange={(value) => setProfile({...profile, emergencyPhone: value})}
+                  placeholder="+260 XXX XXX XXX"
                 />
               </div>
-            </ProfileSection>
-          </div>
-
-          {/* Address Information */}
-          <div className="mt-6">
-            <ProfileSection title="Address Information" icon={MapPin}>
-              <div className="grid md:grid-cols-2 gap-4">
-                <div className="md:col-span-2">
-                  <InputField
-                    label="Street Address"
-                    value={profile.address}
-                    onChange={(value) => setProfile({...profile, address: value})}
-                  />
-                </div>
-                <InputField
-                  label="City"
-                  value={profile.city}
-                  onChange={(value) => setProfile({...profile, city: value})}
-                />
-                <InputField
-                  label="ZIP Code"
-                  value={profile.zipCode}
-                  onChange={(value) => setProfile({...profile, zipCode: value})}
-                />
-              </div>
-            </ProfileSection>
-          </div>
-
-          {/* Medical Information */}
-          <div className="mt-6">
-            <ProfileSection title="Medical Information" icon={Heart}>
-              <div className="space-y-4">
-                <div className="grid md:grid-cols-2 gap-4">
-                  <div className="bg-[#beb5a9] dark:bg-[#6e473b] p-4 rounded-xl border border-[#a78d78]">
-                    <ToggleSwitch
-                      checked={profile.isPregnant}
-                      onChange={() => setProfile({...profile, isPregnant: !profile.isPregnant})}
-                      label="Pregnancy Status"
-                      description="For priority queue placement"
-                    />
-                  </div>
-                  <div className="bg-[#beb5a9] dark:bg-[#6e473b] p-4 rounded-xl border border-[#a78d78]">
-                    <ToggleSwitch
-                      checked={profile.hasSpecialNeeds}
-                      onChange={() => setProfile({...profile, hasSpecialNeeds: !profile.hasSpecialNeeds})}
-                      label="Special Needs"
-                      description="For priority assistance"
-                    />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <label className="block text-sm font-medium text-[#291c0e] dark:text-[#e1d4c2] font-sans">
-                    Medical Notes (Optional)
-                  </label>
-                  <EditableText
-                    value={profile.medicalNotes}
-                    onChange={(value) => setProfile({...profile, medicalNotes: value})}
-                    disabled={!isEditing}
-                    multiline={true}
-                    className="placeholder-[#6e473b] dark:placeholder-[#beb5a9]"
-                  />
-                  {!profile.medicalNotes && isEditing && (
-                    <p className="text-xs text-[#6e473b] dark:text-[#beb5a9] font-sans">
-                      Any medical conditions or special requirements...
-                    </p>
-                  )}
-                </div>
-              </div>
-            </ProfileSection>
-          </div>
-
-          {/* Notification Preferences */}
-          <div className="mt-6">
-            <ProfileSection title="Notification Preferences" icon={Bell}>
-              <div className="space-y-1">
-                <ToggleSwitch
-                  checked={notifications.queueUpdates}
-                  onChange={() => setNotifications({...notifications, queueUpdates: !notifications.queueUpdates})}
-                  label="Queue Updates"
-                  description="Get notified about queue status changes"
-                />
-                <ToggleSwitch
-                  checked={notifications.appointments}
-                  onChange={() => setNotifications({...notifications, appointments: !notifications.appointments})}
-                  label="Appointment Reminders"
-                  description="Receive reminders for upcoming appointments"
-                />
-                <ToggleSwitch
-                  checked={notifications.promotions}
-                  onChange={() => setNotifications({...notifications, promotions: !notifications.promotions})}
-                  label="Promotions & Offers"
-                  description="Get notified about special offers and discounts"
-                />
-                <ToggleSwitch
-                  checked={notifications.emergencies}
-                  onChange={() => setNotifications({...notifications, emergencies: !notifications.emergencies})}
-                  label="Emergency Alerts"
-                  description="Important service disruptions and emergencies"
-                />
-              </div>
-            </ProfileSection>
-          </div>
-
-          {/* Privacy Settings */}
-          <div className="mt-6">
-            <ProfileSection title="Privacy Settings" icon={Shield}>
-              <div className="space-y-1">
-                <ToggleSwitch
-                  checked={privacy.shareLocation}
-                  onChange={() => setPrivacy({...privacy, shareLocation: !privacy.shareLocation})}
-                  label="Share Location"
-                  description="Allow location sharing for dynamic queue management"
-                />
-                <ToggleSwitch
-                  checked={privacy.showProfile}
-                  onChange={() => setPrivacy({...privacy, showProfile: !privacy.showProfile})}
-                  label="Public Profile"
-                  description="Make your profile visible to service providers"
-                />
-                <ToggleSwitch
-                  checked={privacy.allowNotifications}
-                  onChange={() => setPrivacy({...privacy, allowNotifications: !privacy.allowNotifications})}
-                  label="Push Notifications"
-                  description="Allow the app to send push notifications"
-                />
-              </div>
-            </ProfileSection>
-          </div>
-
-          {/* Save Button */}
-          {isEditing && (
-            <div className="mt-8 flex justify-center">
-              <button
-                onClick={handleSave}
-                className="bg-[#6e473b] dark:bg-[#a78d78] text-white px-8 py-4 rounded-xl font-semibold text-lg hover:bg-[#a78d78] dark:hover:bg-[#6e473b] focus:ring-2 focus:ring-[#a78d78] focus:ring-offset-2 focus:ring-offset-[#e1d4c2] dark:focus:ring-offset-[#291c0e] transition-all duration-200 flex items-center gap-2 font-sans"
-              >
-                <Save className="w-5 h-5" />
-                Save Changes
-              </button>
             </div>
-          )}
+          </div>
+
+          {/* Priority Status */}
+          <div className="mt-6 bg-white dark:bg-[#291c0e] rounded-lg shadow-lg p-6 border border-[#beb5a9] dark:border-[#6e473b]">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="bg-[#a78d78] p-2 rounded-xl">
+                <Heart className="w-5 h-5 text-white" />
+              </div>
+              <h3 className="text-lg font-semibold text-[#291c0e] dark:text-[#e1d4c2]">
+                Priority Status
+              </h3>
+            </div>
+            <div className="space-y-4">
+              <div className="bg-[#e1d4c2] dark:bg-[#6e473b]/30 p-4 rounded-xl">
+                <ToggleSwitch
+                  checked={profile.isPregnant}
+                  onChange={() => setProfile({...profile, isPregnant: !profile.isPregnant})}
+                  label="Pregnancy Status"
+                  description="For priority queue placement"
+                />
+              </div>
+              <div className="bg-[#e1d4c2] dark:bg-[#6e473b]/30 p-4 rounded-xl">
+                <ToggleSwitch
+                  checked={profile.hasDisability}
+                  onChange={() => setProfile({...profile, hasDisability: !profile.hasDisability})}
+                  label="Disability Status"
+                  description="For priority assistance"
+                />
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </ClientLayout>

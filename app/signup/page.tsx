@@ -12,7 +12,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Users, UserCheck, Building2, ArrowLeft, Eye, EyeOff } from "lucide-react";
 import { toast } from "sonner";
-import { supabase } from "../../utils/supabase/client";
+import { supabase } from "@/utils/supabase/client";
 
 export default function SignupPage() {
   const [formData, setFormData] = useState({
@@ -81,6 +81,7 @@ export default function SignupPage() {
       const userRole = roleMapping[formData.userType as keyof typeof roleMapping];
 
       // 1. Sign up the user with Supabase Auth
+      // The database trigger will automatically create the profile
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: formData.email,
         password: formData.password,
@@ -106,26 +107,44 @@ export default function SignupPage() {
         return;
       }
 
-      // 2. Insert profile data into profiles table
-      const { error: profileError } = await supabase
+      // 2. Wait for trigger to create profile (give it a moment)
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
+      // 3. Try to create profile manually (will succeed if trigger didn't work, will fail silently if it did)
+      const { error: profileInsertError } = await supabase
         .from('profiles')
         .insert({
           id: authData.user.id,
           email: formData.email,
           first_name: formData.firstName,
           last_name: formData.lastName,
-          phone: formData.phone,
+          phone: formData.phone || '',
           role: userRole,
         });
 
-      if (profileError) {
-        console.error('Profile creation error:', profileError);
-        toast.error("Account created but profile setup failed. Please contact support.");
-        setIsLoading(false);
-        return;
+      // If insert failed due to duplicate key, that's fine - trigger created it
+      // If it failed for another reason, log it but continue (might still work)
+      if (profileInsertError && profileInsertError.code !== '23505') {
+        console.warn('Profile insert warning:', profileInsertError);
       }
 
-      // 3. If company user, create company record
+      // 4. Final verification - check if profile exists now
+      const { data: finalProfile, error: finalCheckError } = await supabase
+        .from('profiles')
+        .select('id, role')
+        .eq('id', authData.user.id)
+        .maybeSingle();
+
+      if (finalCheckError) {
+        console.error('Final profile check error:', finalCheckError);
+        // Continue anyway - user might still be able to log in
+      }
+
+      if (!finalProfile) {
+        toast.warning("Account created! If you have issues logging in, please contact support.");
+      }
+
+      // 4. If company user, create company record
       if (formData.userType === 'company' && formData.companyName) {
         const { error: companyError } = await supabase
           .from('companies')
@@ -196,7 +215,7 @@ export default function SignupPage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="space-y-4">
                 {/* User Type Selection */}
                 <div className="space-y-2">
                   <Label>Account Type</Label>
@@ -378,7 +397,7 @@ export default function SignupPage() {
                 </div>
 
                 <Button
-                  type="submit"
+                  onClick={handleSubmit}
                   disabled={isLoading}
                   className="w-full myturn-button-primary h-12 text-base"
                 >
@@ -396,7 +415,7 @@ export default function SignupPage() {
                     </Link>
                   </p>
                 </div>
-              </form>
+              </div>
             </CardContent>
           </Card>
         </div>

@@ -11,6 +11,7 @@ import { Separator } from "@/components/ui/separator";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Users, UserCheck, Building2, ArrowLeft, Eye, EyeOff } from "lucide-react";
 import { toast } from "sonner";
+import { supabase } from "@/utils/supabase/client";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -27,17 +28,75 @@ export default function LoginPage() {
 
     setIsLoading(true);
     
-    // Simulate API call
-    setTimeout(() => {
-      toast.success(`Welcome back! Logging in as ${userType}...`);
+    try {
+      // 1. Authenticate with Supabase Auth
+      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+        email: email,
+        password: password,
+      });
+
+      if (authError) {
+        toast.error(authError.message);
+        setIsLoading(false);
+        return;
+      }
+
+      if (!authData.user) {
+        toast.error("Login failed. Please try again.");
+        setIsLoading(false);
+        return;
+      }
+
+      // 2. Get user profile from database to check their role
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('role, first_name, last_name')
+        .eq('id', authData.user.id)
+        .single();
+
+      if (profileError) {
+        console.error('Profile fetch error:', profileError);
+        toast.error("Error loading user profile. Please contact support.");
+        setIsLoading(false);
+        return;
+      }
+
+      // 3. Verify the user is logging in with the correct account type
+      const userRole = profile.role;
+      
+      // Map roles to account types
+      const isClientRole = userRole === 'client';
+      const isCompanyRole = userRole === 'company_admin' || userRole === 'branch_manager';
+
+      if (userType === 'client' && !isClientRole) {
+        toast.error("This account is not a client account. Please use 'Login as Company'.");
+        await supabase.auth.signOut();
+        setIsLoading(false);
+        return;
+      }
+
+      if (userType === 'company' && !isCompanyRole) {
+        toast.error("This account is not a company account. Please use 'Login as Client'.");
+        await supabase.auth.signOut();
+        setIsLoading(false);
+        return;
+      }
+
+      // 4. Success! Redirect to appropriate dashboard
+      toast.success(`Welcome back, ${profile.first_name}!`);
       
       if (userType === 'client') {
         router.push('/client/dashboard');
       } else {
         router.push('/company/dashboard');
       }
+      
+    } catch (error) {
+      console.error('Login error:', error);
+      toast.error("An unexpected error occurred. Please try again.");
+    } finally {
       setIsLoading(false);
-    }, 1500);
+    }
   };
 
   return (
@@ -83,6 +142,7 @@ export default function LoginPage() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="transition-all duration-200 focus:ring-2 focus:ring-primary/20"
+                  disabled={isLoading}
                 />
               </div>
               
@@ -96,6 +156,7 @@ export default function LoginPage() {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     className="pr-10 transition-all duration-200 focus:ring-2 focus:ring-primary/20"
+                    disabled={isLoading}
                   />
                   <Button
                     type="button"
@@ -103,6 +164,7 @@ export default function LoginPage() {
                     size="sm"
                     className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
                     onClick={() => setShowPassword(!showPassword)}
+                    disabled={isLoading}
                   >
                     {showPassword ? (
                       <EyeOff className="w-4 h-4 text-muted-foreground" />
