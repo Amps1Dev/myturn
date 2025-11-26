@@ -14,17 +14,34 @@ import {
   Settings,
   BarChart3,
   MessageSquare,
-  Plus,
   Eye,
   CheckCircle,
-  XCircle,
-  Building2
+  Loader2,
+  Phone
 } from "lucide-react";
 import Link from "next/link";
 import { CompanyLayout } from "@/components/company-layout";
+import { QueueService } from "@/lib/services/queue.service";
+import { getBranchDashboardStats, getBranchRecentActivity, getTodayAppointments } from "@/lib/services/analytics.service";
+import { supabase } from "@/lib/supabase";
+import type { QueueEntry } from '@/lib/supabase';
 
 export default function CompanyDashboard() {
   const [currentTime, setCurrentTime] = useState(new Date());
+  const [loading, setLoading] = useState(true);
+  const [branchQueues, setBranchQueues] = useState<QueueEntry[]>([]);
+  const [branchId, setBranchId] = useState<string>('');
+  const [branchName, setBranchName] = useState<string>('Cairo Road Branch');
+  const [stats, setStats] = useState({
+    totalCustomers: 0,
+    currentQueue: 0,
+    averageWaitTime: 0,
+    completedToday: 0,
+    peakHour: "11:00 AM",
+    efficiency: 0
+  });
+  const [recentActivity, setRecentActivity] = useState<any[]>([]);
+  const [upcomingAppointments, setUpcomingAppointments] = useState<any[]>([]);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -34,143 +51,154 @@ export default function CompanyDashboard() {
     return () => clearInterval(timer);
   }, []);
 
-  const todayStats = {
-    totalCustomers: 127,
-    currentQueue: 18,
-    averageWaitTime: 23,
-    completedToday: 109,
-    peakHour: "11:00 AM"
-  };
-
-  const institutionId = 'zanaco-bank-cairo'; // branch identifier used by bookings
-  const [branchBookings, setBranchBookings] = useState<Array<any>>([]);
-  const [userProfile, setUserProfile] = useState<any | null>(null);
-
+  // Get current user's branch
   useEffect(() => {
-    const storageKey = 'myturn_bookings';
-    const loadBookings = () => {
-      try {
-        const raw = localStorage.getItem(storageKey);
-        const all = raw ? JSON.parse(raw) : [];
-        const forBranch = all.filter((b: any) => String(b.institutionId) === String(institutionId));
-        setBranchBookings(forBranch);
-      } catch (e) {
-        setBranchBookings([]);
+    const getBranch = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        setLoading(false);
+        return;
+      }
+
+      // Get user's profile to find their branch
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .single();
+
+      if (profile?.role === 'branch_manager') {
+        // Get branch where user is manager
+        const { data: branch } = await supabase
+          .from('branches')
+          .select('id, name')
+          .eq('manager_id', user.id)
+          .single();
+
+        if (branch) {
+          setBranchId(branch.id);
+          setBranchName(branch.name);
+        }
+      } else if (profile?.role === 'company_admin' || profile?.role === 'super_admin') {
+        // Get first branch of their company
+        const { data: branches } = await supabase
+          .from('branches')
+          .select('id, name')
+          .limit(1);
+
+        if (branches && branches.length > 0) {
+          setBranchId(branches[0].id);
+          setBranchName(branches[0].name);
+        }
       }
     };
-    loadBookings();
-    // also try to load the signed-in client profile
-    try {
-      // prefer cookie
-      const match = document.cookie.match(/(?:^|; )myturn_user=([^;]+)/);
-      if (match) {
-        setUserProfile(JSON.parse(decodeURIComponent(match[1])));
-      } else {
-        const rawProfile = localStorage.getItem('myturn_profile');
-        if (rawProfile) setUserProfile(JSON.parse(rawProfile));
-      }
-    } catch (e) {
-      // ignore
-    }
-    const onStorage = (e: StorageEvent) => {
-      if (e.key === storageKey) loadBookings();
-    };
-    window.addEventListener('storage', onStorage);
-    return () => window.removeEventListener('storage', onStorage);
+
+    getBranch();
   }, []);
 
-  const cancelBooking = (bookingId: string) => {
-    try {
-      const storageKey = 'myturn_bookings';
-      const raw = localStorage.getItem(storageKey);
-      const existing = raw ? JSON.parse(raw) : [];
-      const filtered = existing.filter((b: any) => String(b.id) !== String(bookingId));
-      localStorage.setItem(storageKey, JSON.stringify(filtered));
-      setBranchBookings((prev) => prev.filter(b => String(b.id) !== String(bookingId)));
-    } catch (e) {
-      console.error('Failed to cancel booking', e);
+  // Load all branch data
+  useEffect(() => {
+    if (!branchId) return;
+
+    const loadData = async () => {
+      setLoading(true);
+      
+      // Load queues
+      const queues = await QueueService.getBranchQueues(branchId);
+      setBranchQueues(queues);
+
+      // Load stats
+      const branchStats = await getBranchDashboardStats(branchId);
+      if (branchStats) {
+        setStats(branchStats);
+      }
+
+      // Load recent activity
+      const activity = await getBranchRecentActivity(branchId, 5);
+      setRecentActivity(activity);
+
+      // Load appointments
+      const appointments = await getTodayAppointments(branchId);
+      setUpcomingAppointments(appointments);
+
+      setLoading(false);
+    };
+
+    loadData();
+
+    // Subscribe to real-time updates
+    const subscription = QueueService.subscribeToQueueUpdates(branchId, () => {
+      loadData(); // Reload data on any queue update
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [branchId]);
+
+  const handleCallNext = async () => {
+    const nextCustomer = await QueueService.callNextCustomer(branchId);
+    if (nextCustomer) {
+      const queues = await QueueService.getBranchQueues(branchId);
+      setBranchQueues(queues);
+      const branchStats = await getBranchDashboardStats(branchId);
+      if (branchStats) setStats(branchStats);
     }
   };
 
-  const markCalled = (bookingId: string) => {
-    try {
-      const storageKey = 'myturn_bookings';
-      const raw = localStorage.getItem(storageKey);
-      const existing = raw ? JSON.parse(raw) : [];
-      const updated = existing.map((b: any) => {
-        if (String(b.id) === String(bookingId)) {
-          return { ...b, status: 'called', calledAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) };
-        }
-        return b;
-      });
-      localStorage.setItem(storageKey, JSON.stringify(updated));
-      setBranchBookings(updated.filter((b: any) => String(b.institutionId) === String(institutionId)));
-    } catch (e) {
-      console.error('Failed to mark booking called', e);
-    }
+  const handleMarkServed = async (queueId: string) => {
+    await QueueService.updateQueueStatus(queueId, 'served');
+    const queues = await QueueService.getBranchQueues(branchId);
+    setBranchQueues(queues);
+    const branchStats = await getBranchDashboardStats(branchId);
+    if (branchStats) setStats(branchStats);
   };
 
-  // Only count bookings for the signed-in user for this branch (no fake numbers)
-  const branchBookingsForUser = userProfile
-    ? branchBookings.filter((b: any) => b.user && (b.user.email === userProfile.email || b.user.email === userProfile?.email))
-    : [];
+  const handleCancel = async (queueId: string) => {
+    await QueueService.cancelQueue(queueId);
+    const queues = await QueueService.getBranchQueues(branchId);
+    setBranchQueues(queues);
+    const branchStats = await getBranchDashboardStats(branchId);
+    if (branchStats) setStats(branchStats);
+  };
 
-  const dynamicCurrentQueue = branchBookingsForUser.length;
-  const dynamicTotalCustomers = branchBookingsForUser.length;
+  const formatTime = (dateString: string) => {
+    return new Date(dateString).toLocaleTimeString('en-US', {
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
 
-  // derive recent activity and upcoming appointments from the user's bookings only
-  const recentActivity = branchBookingsForUser.map((b: any, i: number) => ({
-    id: b.id || i,
-    customer: b.user?.firstName ? `${b.user.firstName} ${b.user.lastName?.charAt(0)}.` : (b.user?.email || 'You'),
-    action: b.status === 'booked' ? 'Joined queue' : b.status || 'Booked',
-    time: b.joinedAt || '-',
-    position: b.position || null,
-  }));
+  // Group queues by status
+  const waitingQueues = branchQueues.filter(q => q.status === 'waiting');
+  const calledQueues = branchQueues.filter(q => q.status === 'called');
 
-  const upcomingAppointments = branchBookingsForUser.map((b: any, i: number) => ({
-    id: b.id || i,
-    customer: b.user?.firstName ? `${b.user.firstName} ${b.user.lastName?.charAt(0)}.` : (b.user?.email || 'You'),
-    service: b.service || 'Service',
-    time: b.joinedAt || '-',
-    status: b.status === 'booked' ? 'confirmed' : (b.status || 'pending'),
-  }));
+  if (loading) {
+    return (
+      <CompanyLayout>
+        <div className="flex items-center justify-center h-96">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      </CompanyLayout>
+    );
+  }
 
   return (
     <CompanyLayout>
       <div className="space-y-8">
         {/* Welcome Section */}
-          <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold">Welcome back, Zanaco Bank!</h1>
+            <h1 className="text-3xl font-bold">Welcome back, Branch Manager!</h1>
             <p className="text-muted-foreground mt-1">
               {currentTime.toLocaleDateString('en-GB', { 
                 weekday: 'long', 
                 year: 'numeric', 
                 month: 'long', 
                 day: 'numeric' 
-              })} • Cairo Road Branch
+              })} • {branchName}
             </p>
           </div>
-            {branchBookingsForUser.length > 0 && (
-              <div className="ml-4">
-                <div className="bg-blue-50 dark:bg-blue-900/20 px-3 py-2 rounded-md">
-                  <div className="text-sm font-medium">You have {branchBookingsForUser.length} booking{branchBookingsForUser.length>1?'s':''} at this branch</div>
-                  <div className="mt-2 space-y-1 text-sm">
-                    {branchBookingsForUser.map((b) => (
-                      <div key={b.id} className="flex items-center justify-between gap-2">
-                        <div className="truncate">{b.institutionName || 'Booking'} • {b.joinedAt || ''} {b.status === 'called' && <span className="text-xs text-blue-600 ml-2">(Called)</span>}</div>
-                        <div className="flex items-center gap-2">
-                          {b.status !== 'called' && (
-                            <button onClick={() => markCalled(b.id)} className="text-sm text-primary-600 hover:underline">Mark Called</button>
-                          )}
-                          <button onClick={() => cancelBooking(b.id)} className="text-sm text-red-600 hover:underline">Cancel</button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
           <div className="flex items-center space-x-3">
             <Badge variant="secondary" className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
               <div className="w-2 h-2 bg-green-500 rounded-full mr-2"></div>
@@ -193,10 +221,8 @@ export default function CompanyDashboard() {
               <Users className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-primary">{dynamicCurrentQueue}</div>
-              <p className="text-xs text-muted-foreground">
-                People waiting
-              </p>
+              <div className="text-2xl font-bold text-primary">{stats.currentQueue}</div>
+              <p className="text-xs text-muted-foreground">People waiting</p>
             </CardContent>
           </Card>
 
@@ -206,10 +232,8 @@ export default function CompanyDashboard() {
               <Clock className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{todayStats.averageWaitTime}m</div>
-              <p className="text-xs text-muted-foreground">
-                -5m from yesterday
-              </p>
+              <div className="text-2xl font-bold">{stats.averageWaitTime}m</div>
+              <p className="text-xs text-muted-foreground">Real-time average</p>
             </CardContent>
           </Card>
 
@@ -219,10 +243,8 @@ export default function CompanyDashboard() {
               <CheckCircle className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{todayStats.completedToday}</div>
-              <p className="text-xs text-muted-foreground">
-                +12% from yesterday
-              </p>
+              <div className="text-2xl font-bold">{stats.completedToday}</div>
+              <p className="text-xs text-muted-foreground">Services completed</p>
             </CardContent>
           </Card>
 
@@ -232,10 +254,8 @@ export default function CompanyDashboard() {
               <TrendingUp className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{dynamicTotalCustomers}</div>
-              <p className="text-xs text-muted-foreground">
-                Peak at {todayStats.peakHour}
-              </p>
+              <div className="text-2xl font-bold">{stats.totalCustomers}</div>
+              <p className="text-xs text-muted-foreground">Peak at {stats.peakHour}</p>
             </CardContent>
           </Card>
 
@@ -245,10 +265,8 @@ export default function CompanyDashboard() {
               <BarChart3 className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">94%</div>
-              <p className="text-xs text-muted-foreground">
-                Service completion
-              </p>
+              <div className="text-2xl font-bold">{stats.efficiency}%</div>
+              <p className="text-xs text-muted-foreground">Service completion</p>
             </CardContent>
           </Card>
         </div>
@@ -266,31 +284,106 @@ export default function CompanyDashboard() {
                   </CardTitle>
                   <CardDescription>Real-time queue management</CardDescription>
                 </div>
-                <Link href="/company/branch/queue">
-                  <Button className="myturn-button-primary">
-                    <Eye className="mr-2 h-4 w-4" />
-                    Manage Queue
-                  </Button>
-                </Link>
+                <Button 
+                  className="myturn-button-primary"
+                  onClick={handleCallNext}
+                  disabled={waitingQueues.length === 0}
+                >
+                  Call Next
+                </Button>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-medium">Queue Progress</span>
                   <span className="text-sm text-muted-foreground">
-                    {todayStats.completedToday} of {dynamicTotalCustomers} completed
+                    {stats.completedToday} of {stats.totalCustomers} completed
                   </span>
                 </div>
-                <Progress value={85} className="h-3" />
+                <Progress 
+                  value={stats.totalCustomers > 0 ? (stats.completedToday / stats.totalCustomers) * 100 : 0} 
+                  className="h-3" 
+                />
                 
                 <div className="grid grid-cols-2 gap-4 pt-4">
                   <div className="text-center p-4 bg-muted/50 rounded-lg">
-                    <div className="text-2xl font-bold text-primary">{dynamicCurrentQueue}</div>
+                    <div className="text-2xl font-bold text-primary">{stats.currentQueue}</div>
                     <p className="text-sm text-muted-foreground">In Queue</p>
                   </div>
                   <div className="text-center p-4 bg-muted/50 rounded-lg">
-                    <div className="text-2xl font-bold text-green-600">{todayStats.completedToday}</div>
+                    <div className="text-2xl font-bold text-green-600">{stats.completedToday}</div>
                     <p className="text-sm text-muted-foreground">Served</p>
                   </div>
+                </div>
+
+                {/* Currently Called */}
+                {calledQueues.length > 0 && (
+                  <div className="mt-6 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                    <h4 className="font-medium text-sm mb-3 text-blue-900 dark:text-blue-100">
+                      Currently Being Served
+                    </h4>
+                    {calledQueues.map((queue) => (
+                      <div key={queue.id} className="flex items-center justify-between p-3 bg-white dark:bg-gray-800 rounded-lg mb-2">
+                        <div className="flex items-center space-x-3">
+                          <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900 rounded-full flex items-center justify-center">
+                            <span className="font-bold text-blue-600 dark:text-blue-300">#{queue.queue_number}</span>
+                          </div>
+                          <div>
+                            <p className="font-medium text-sm">
+                              {(queue as any).user?.first_name} {(queue as any).user?.last_name}
+                            </p>
+                            <p className="text-xs text-muted-foreground flex items-center gap-1">
+                              <Phone className="h-3 w-3" />
+                              {(queue as any).user?.phone || 'No phone'}
+                            </p>
+                          </div>
+                        </div>
+                        <Button 
+                          size="sm" 
+                          onClick={() => handleMarkServed(queue.id)}
+                          className="bg-green-600 hover:bg-green-700"
+                        >
+                          Mark Complete
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Queue List */}
+                <div className="mt-6 space-y-3">
+                  <h4 className="font-medium text-sm">Waiting Queue ({waitingQueues.length})</h4>
+                  {waitingQueues.slice(0, 5).map((queue) => (
+                    <div key={queue.id} className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50 transition-colors">
+                      <div className="flex items-center space-x-3">
+                        <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center">
+                          <span className="font-bold text-primary">#{queue.queue_number}</span>
+                        </div>
+                        <div>
+                          <p className="font-medium text-sm">
+                            {(queue as any).user?.first_name} {(queue as any).user?.last_name}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {queue.service_type || 'General Service'}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Badge variant="secondary">{queue.priority_type}</Badge>
+                        <Button 
+                          size="sm" 
+                          variant="ghost"
+                          onClick={() => handleCancel(queue.id)}
+                        >
+                          Cancel
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                  {waitingQueues.length === 0 && (
+                    <div className="text-center py-6 text-muted-foreground">
+                      No customers in queue
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -327,12 +420,12 @@ export default function CompanyDashboard() {
                       </div>
                     </div>
                   ))}
+                  {recentActivity.length === 0 && (
+                    <div className="text-center py-4 text-sm text-muted-foreground">
+                      No recent activity
+                    </div>
+                  )}
                 </div>
-                <Link href="/company/branch/queue">
-                  <Button variant="ghost" className="w-full mt-4">
-                    View All Activity
-                  </Button>
-                </Link>
               </CardContent>
             </Card>
           </div>
@@ -345,12 +438,14 @@ export default function CompanyDashboard() {
                 <CardTitle className="text-lg">Quick Actions</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
-                <Link href="/company/branch/queue">
-                  <Button className="w-full justify-start myturn-button-primary">
-                    <Users className="mr-2 h-4 w-4" />
-                    Manage Queue
-                  </Button>
-                </Link>
+                <Button 
+                  className="w-full justify-start myturn-button-primary"
+                  onClick={handleCallNext}
+                  disabled={waitingQueues.length === 0}
+                >
+                  <Users className="mr-2 h-4 w-4" />
+                  Call Next Customer
+                </Button>
                 <Link href="/company/branch/analytics">
                   <Button variant="outline" className="w-full justify-start">
                     <BarChart3 className="mr-2 h-4 w-4" />
@@ -372,12 +467,12 @@ export default function CompanyDashboard() {
               </CardContent>
             </Card>
 
-            {/* Upcoming Appointments */}
+            {/* Today's Appointments */}
             <Card className="myturn-card">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Calendar className="h-5 w-5" />
-                  Upcoming Appointments
+                  Today's Appointments
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
@@ -385,10 +480,7 @@ export default function CompanyDashboard() {
                   <div key={appointment.id} className="border rounded-lg p-3">
                     <div className="flex items-center justify-between mb-2">
                       <h4 className="font-medium text-sm">{appointment.customer}</h4>
-                      <Badge 
-                        variant={appointment.status === 'confirmed' ? 'secondary' : 'outline'}
-                        className="text-xs"
-                      >
+                      <Badge variant="secondary" className="text-xs">
                         {appointment.status}
                       </Badge>
                     </div>
@@ -396,10 +488,11 @@ export default function CompanyDashboard() {
                     <p className="text-xs font-medium">{appointment.time}</p>
                   </div>
                 ))}
-                <Button variant="ghost" size="sm" className="w-full">
-                  <Plus className="mr-2 h-3 w-3" />
-                  View All Appointments
-                </Button>
+                {upcomingAppointments.length === 0 && (
+                  <div className="text-center py-4 text-sm text-muted-foreground">
+                    No appointments today
+                  </div>
+                )}
               </CardContent>
             </Card>
 

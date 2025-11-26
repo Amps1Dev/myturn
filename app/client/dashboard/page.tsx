@@ -20,9 +20,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { ClientLayout } from "@/components/client-layout";
-import { zambianInstitutions, getPopularInstitutions } from "@/lib/data/institutions";
 import { supabase } from "@/utils/supabase/client";
-import { getUserActiveQueues, leaveQueue } from "@/lib/api/queue";
 import { toast } from "sonner";
 
 export default function ClientDashboard() {
@@ -30,6 +28,11 @@ export default function ClientDashboard() {
   const [activeQueues, setActiveQueues] = useState<Array<any>>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [userId, setUserId] = useState<string | null>(null);
+  const [stats, setStats] = useState({
+    activeQueues: 0,
+    timeSaved: 0,
+    completedVisits: 0
+  });
 
   // Get current user
   useEffect(() => {
@@ -37,53 +40,82 @@ export default function ClientDashboard() {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
         setUserId(user.id);
+      } else {
+        setIsLoading(false);
       }
     };
     getCurrentUser();
   }, []);
 
-  // Fetch active queues from database
+  // Fetch active queues and stats
   useEffect(() => {
-    const fetchActiveQueues = async () => {
-      if (!userId) return;
-      
+    if (!userId) return;
+    
+    const fetchData = async () => {
       setIsLoading(true);
+      
       try {
-        const queues = await getUserActiveQueues(userId);
+        // Get active queues
+        const { data: queues, error: queueError } = await supabase
+          .from('queue_entries')
+          .select(`
+            *,
+            institution:institutions(name, location, status),
+            branch:branches(name, address)
+          `)
+          .eq('user_id', userId)
+          .in('status', ['waiting', 'called'])
+          .order('joined_at', { ascending: false });
+
+        if (queueError) throw queueError;
         setActiveQueues(queues || []);
+
+        // Get completed queues for stats
+        const { data: completedQueues } = await supabase
+          .from('queue_entries')
+          .select('*')
+          .eq('user_id', userId)
+          .eq('status', 'served');
+
+        // Calculate time saved (assuming 30 mins saved per visit)
+        const timeSaved = (completedQueues?.length || 0) * 0.5;
+
+        setStats({
+          activeQueues: queues?.length || 0,
+          timeSaved: Math.round(timeSaved * 10) / 10,
+          completedVisits: completedQueues?.length || 0
+        });
+
       } catch (error) {
-        console.error('Error fetching queues:', error);
-        toast.error("Failed to load your queues");
+        console.error('Error fetching data:', error);
+        toast.error("Failed to load dashboard data");
       } finally {
         setIsLoading(false);
       }
     };
 
-    fetchActiveQueues();
+    fetchData();
 
-    // Set up real-time subscription for queue updates
-    if (userId) {
-      const channel = supabase
-        .channel('queue_changes')
-        .on(
-          'postgres_changes',
-          {
-            event: '*',
-            schema: 'public',
-            table: 'queue_entries',
-            filter: `user_id=eq.${userId}`
-          },
-          (payload) => {
-            console.log('Queue update:', payload);
-            fetchActiveQueues(); // Refresh queues on any change
-          }
-        )
-        .subscribe();
+    // Set up real-time subscription
+    const channel = supabase
+      .channel('user_queues')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'queue_entries',
+          filter: `user_id=eq.${userId}`
+        },
+        () => {
+          fetchData();
+        }
+      )
+      .subscribe();
 
-      return () => {
-        supabase.removeChannel(channel);
-      };
-    }
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [userId]);
 
   useEffect(() => {
@@ -98,30 +130,31 @@ export default function ClientDashboard() {
     if (!userId) return;
 
     try {
-      const result = await leaveQueue(queueId, userId);
-      if (result) {
-        toast.success("Successfully left the queue");
-        setActiveQueues(prev => prev.filter(q => q.id !== queueId));
-      } else {
-        toast.error("Failed to leave queue");
-      }
+      const { error } = await supabase
+        .from('queue_entries')
+        .update({ status: 'cancelled' })
+        .eq('id', queueId)
+        .eq('user_id', userId);
+
+      if (error) throw error;
+
+      toast.success("Successfully left the queue");
+      setActiveQueues(prev => prev.filter(q => q.id !== queueId));
     } catch (error) {
       console.error('Error leaving queue:', error);
-      toast.error("An error occurred while leaving the queue");
+      toast.error("Failed to leave queue");
     }
   };
 
-  const popularInstitutions = getPopularInstitutions();
-
-  const upcomingAppointments = [
-    {
-      id: '1',
-      institution: 'RTSA - Driving License',
-      date: 'Today',
-      time: '2:00 PM',
-      status: 'confirmed'
-    }
-  ];
+  if (isLoading) {
+    return (
+      <ClientLayout>
+        <div className="flex items-center justify-center h-96">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      </ClientLayout>
+    );
+  }
 
   return (
     <ClientLayout>
@@ -155,7 +188,7 @@ export default function ClientDashboard() {
               <Users className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{activeQueues.length}</div>
+              <div className="text-2xl font-bold">{stats.activeQueues}</div>
               <p className="text-xs text-muted-foreground">
                 Currently waiting
               </p>
@@ -168,7 +201,7 @@ export default function ClientDashboard() {
               <Clock className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">4.2h</div>
+              <div className="text-2xl font-bold">{stats.timeSaved}h</div>
               <p className="text-xs text-muted-foreground">
                 This month
               </p>
@@ -181,7 +214,7 @@ export default function ClientDashboard() {
               <CheckCircle className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">12</div>
+              <div className="text-2xl font-bold">{stats.completedVisits}</div>
               <p className="text-xs text-muted-foreground">
                 Queue visits
               </p>
@@ -194,9 +227,11 @@ export default function ClientDashboard() {
               <Calendar className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">2:00 PM</div>
+              <div className="text-2xl font-bold">
+                {activeQueues.length > 0 ? 'Active' : 'None'}
+              </div>
               <p className="text-xs text-muted-foreground">
-                Today at RTSA
+                {activeQueues.length > 0 ? 'In progress' : 'No upcoming visits'}
               </p>
             </CardContent>
           </Card>
@@ -205,7 +240,6 @@ export default function ClientDashboard() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Current Queue Status */}
           <div className="lg:col-span-2 space-y-6">
-            {/* Active Queues */}
             <Card className="myturn-card">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -215,12 +249,7 @@ export default function ClientDashboard() {
                 <CardDescription>Your active queue positions</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                {isLoading ? (
-                  <div className="text-center py-8">
-                    <Loader2 className="h-8 w-8 animate-spin text-muted-foreground mx-auto" />
-                    <p className="text-sm text-muted-foreground mt-2">Loading your queues...</p>
-                  </div>
-                ) : activeQueues.length > 0 ? (
+                {activeQueues.length > 0 ? (
                   activeQueues.map((queue) => (
                     <div key={queue.id} className="border rounded-lg p-4 space-y-3">
                       <div className="flex items-center justify-between">
@@ -286,95 +315,10 @@ export default function ClientDashboard() {
                 )}
               </CardContent>
             </Card>
-
-            {/* Popular Institutions */}
-            <Card className="myturn-card">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <TrendingUp className="h-5 w-5" />
-                  Popular Institutions
-                </CardTitle>
-                <CardDescription>Trending places near you</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {popularInstitutions.slice(0, 4).map((institution) => (
-                    <div key={institution.id} className="border rounded-lg p-3 hover:shadow-md transition-shadow">
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2">
-                            <div className="w-8 h-8 bg-primary/10 rounded-lg flex items-center justify-center">
-                              <Building2 className="w-4 h-4 text-primary" />
-                            </div>
-                            <div>
-                              <h4 className="font-medium text-sm">{institution.name}</h4>
-                              <p className="text-xs text-muted-foreground flex items-center gap-1">
-                                <MapPin className="h-3 w-3" />
-                                {institution.location}
-                              </p>
-                            </div>
-                          </div>
-                          <div className="mt-2 flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                              <Badge 
-                                variant={institution.status === 'open' ? 'secondary' : 'destructive'}
-                                className="text-xs"
-                              >
-                                {institution.status}
-                              </Badge>
-                              <span className="text-xs text-muted-foreground">
-                                {institution.currentQueue} in queue
-                              </span>
-                            </div>
-                            <Link href={`/client/companies?institution=${encodeURIComponent(institution.id)}`}>
-                              <Button size="sm" variant="ghost" className="text-xs">
-                                Join
-                              </Button>
-                            </Link>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
           </div>
 
           {/* Sidebar */}
           <div className="space-y-6">
-            {/* Upcoming Appointments */}
-            <Card className="myturn-card">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Calendar className="h-5 w-5" />
-                  Upcoming
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {upcomingAppointments.map((appointment) => (
-                  <div key={appointment.id} className="border rounded-lg p-3">
-                    <div className="flex items-center gap-2">
-                      <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                      <div className="flex-1">
-                        <h4 className="font-medium text-sm">{appointment.institution}</h4>
-                        <p className="text-xs text-muted-foreground">
-                          {appointment.date} at {appointment.time}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-                
-                <Link href="/client/my-queue">
-                  <Button variant="ghost" size="sm" className="w-full">
-                    <Plus className="mr-2 h-3 w-3" />
-                    Book Appointment
-                  </Button>
-                </Link>
-              </CardContent>
-            </Card>
-
             {/* Quick Actions */}
             <Card className="myturn-card">
               <CardHeader>
@@ -412,7 +356,7 @@ export default function ClientDashboard() {
                   <div>
                     <h4 className="font-medium text-sm mb-1">Pro Tip</h4>
                     <p className="text-xs text-muted-foreground">
-                      Enable notifications to get alerts 10 minutes before your turn
+                      Enable notifications to get alerts when it's almost your turn
                     </p>
                   </div>
                 </div>

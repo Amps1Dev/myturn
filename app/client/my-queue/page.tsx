@@ -6,32 +6,38 @@ import {
   Users, 
   Gift, 
   X, 
-  Send,
   CheckCircle,
-  AlertCircle,
   Calendar,
   Phone,
   Star,
   ChevronRight,
   Heart,
   UserPlus,
-  Share2
+  Share2,
+  Loader2
 } from "lucide-react";
 import { ClientLayout } from "@/components/client-layout";
+import { supabase } from "@/utils/supabase/client";
+import { toast } from "sonner";
 
 interface QueueSlot {
-  id: number;
-  companyName: string;
-  companyLocation: string;
-  service: string;
-  reason: string;
-  bookedAt: string;
-  estimatedTime: string;
-  position: number;
-  totalInQueue: number;
-  status: "Active" | "Called" | "Missed" | "Completed";
-  companyPhone: string;
-  rating: number;
+  id: string;
+  queue_number: number;
+  status: string;
+  service_type: string;
+  estimated_wait_time: number;
+  joined_at: string;
+  completed_at?: string;
+  institution: {
+    name: string;
+    location: string;
+    phone: string;
+    rating: number;
+  };
+  branch: {
+    name: string;
+    address: string;
+  };
 }
 
 interface GiftModal {
@@ -42,6 +48,10 @@ interface GiftModal {
 
 const MyQueueSlotsPage = () => {
   const [activeTab, setActiveTab] = useState<"active" | "history">("active");
+  const [loading, setLoading] = useState(true);
+  const [userId, setUserId] = useState<string>('');
+  const [activeSlots, setActiveSlots] = useState<QueueSlot[]>([]);
+  const [historySlots, setHistorySlots] = useState<QueueSlot[]>([]);
   const [giftModal, setGiftModal] = useState<GiftModal>({
     isOpen: false,
     slot: null,
@@ -52,102 +62,100 @@ const MyQueueSlotsPage = () => {
   const [isGifting, setIsGifting] = useState(false);
   const [giftSuccess, setGiftSuccess] = useState(false);
 
-  const queueSlots: QueueSlot[] = [
-    {
-      id: 1,
-      companyName: "Zanaco Bank",
-      companyLocation: "Cairo Road, Lusaka",
-      service: "Account Opening",
-      reason: "Need to open a new savings account for my business",
-      bookedAt: "2024-01-15T09:30:00",
-      estimatedTime: "10:45 AM",
-      position: 3,
-      totalInQueue: 12,
-      status: "Active",
-      companyPhone: "+260 211 229229",
-      rating: 4.3
-    },
-    {
-      id: 2,
-      companyName: "MTN Service Center",
-      companyLocation: "Manda Hill Mall, Lusaka",
-      service: "SIM Replacement",
-      reason: "Lost my SIM card and need a replacement",
-      bookedAt: "2024-01-15T14:00:00",
-      estimatedTime: "2:30 PM",
-      position: 1,
-      totalInQueue: 6,
-      status: "Called",
-      companyPhone: "+260 955 000000",
-      rating: 4.0
-    },
-    {
-      id: 3,
-      companyName: "University Teaching Hospital",
-      companyLocation: "Nationalist Road, Lusaka",
-      service: "General Consultation",
-      reason: "Regular checkup and follow-up on previous visit",
-      bookedAt: "2024-01-14T08:00:00",
-      estimatedTime: "11:30 AM",
-      position: 8,
-      totalInQueue: 45,
-      status: "Active",
-      companyPhone: "+260 211 254598",
-      rating: 4.1
-    }
-  ];
+  // Get current user
+  useEffect(() => {
+    const getCurrentUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        setUserId(user.id);
+      } else {
+        setLoading(false);
+      }
+    };
+    getCurrentUser();
+  }, []);
 
-  const historySlots: QueueSlot[] = [
-    {
-      id: 4,
-      companyName: "ZESCO Customer Service",
-      companyLocation: "Electra House, Lusaka",
-      service: "Bill Payment",
-      reason: "Pay outstanding electricity bill",
-      bookedAt: "2024-01-10T11:00:00",
-      estimatedTime: "Completed",
-      position: 0,
-      totalInQueue: 0,
-      status: "Completed",
-      companyPhone: "+260 211 251015",
-      rating: 3.8
-    },
-    {
-      id: 5,
-      companyName: "FNB Zambia",
-      companyLocation: "Findeco House, Cairo Road",
-      service: "Account Services",
-      reason: "Update my contact information",
-      bookedAt: "2024-01-08T13:30:00",
-      estimatedTime: "Missed",
-      position: 0,
-      totalInQueue: 0,
-      status: "Missed",
-      companyPhone: "+260 211 366700",
-      rating: 4.4
-    }
-  ];
+  // Load queue slots
+  useEffect(() => {
+    if (!userId) return;
+
+    const loadSlots = async () => {
+      setLoading(true);
+
+      // Load active slots
+      const { data: active, error: activeError } = await supabase
+        .from('queue_entries')
+        .select(`
+          *,
+          institution:institutions(name, location, phone, rating),
+          branch:branches(name, address)
+        `)
+        .eq('user_id', userId)
+        .in('status', ['waiting', 'called'])
+        .order('joined_at', { ascending: false });
+
+      if (!activeError && active) {
+        setActiveSlots(active as any);
+      }
+
+      // Load history slots
+      const { data: history, error: historyError } = await supabase
+        .from('queue_entries')
+        .select(`
+          *,
+          institution:institutions(name, location, phone, rating),
+          branch:branches(name, address)
+        `)
+        .eq('user_id', userId)
+        .in('status', ['served', 'cancelled', 'no_show'])
+        .order('completed_at', { ascending: false })
+        .limit(20);
+
+      if (!historyError && history) {
+        setHistorySlots(history as any);
+      }
+
+      setLoading(false);
+    };
+
+    loadSlots();
+
+    // Subscribe to real-time updates
+    const subscription = supabase
+      .channel('user_queue_changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'queue_entries',
+          filter: `user_id=eq.${userId}`
+        },
+        () => {
+          loadSlots();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [userId]);
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case "Active":
+      case "waiting":
         return "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300";
-      case "Called":
+      case "called":
         return "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300";
-      case "Completed":
+      case "served":
         return "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300";
-      case "Missed":
+      case "cancelled":
+      case "no_show":
         return "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300";
       default:
         return "bg-gray-100 dark:bg-gray-900/30 text-gray-700 dark:text-gray-300";
     }
-  };
-
-  const getPositionColor = (position: number, total: number) => {
-    const percentage = position / total;
-    if (percentage <= 0.3) return "text-green-600 dark:text-green-400";
-    if (percentage <= 0.6) return "text-yellow-600 dark:text-yellow-400";
-    return "text-red-600 dark:text-red-400";
   };
 
   const openGiftModal = (slot: QueueSlot, giftType: "next" | "specific") => {
@@ -170,16 +178,29 @@ const MyQueueSlotsPage = () => {
     
     setIsGifting(true);
     
-    // Simulate API call
+    // TODO: Implement gifting logic
     setTimeout(() => {
       setIsGifting(false);
       setGiftSuccess(true);
+      toast.success("Queue slot gifted successfully");
       
-      // Auto close after 2 seconds
       setTimeout(() => {
         closeGiftModal();
       }, 2000);
     }, 1500);
+  };
+
+  const handleCancelSlot = async (slotId: string) => {
+    const { error } = await supabase
+      .from('queue_entries')
+      .update({ status: 'cancelled' })
+      .eq('id', slotId);
+
+    if (error) {
+      toast.error("Failed to cancel slot");
+    } else {
+      toast.success("Slot cancelled successfully");
+    }
   };
 
   const formatTime = (dateString: string) => {
@@ -198,51 +219,21 @@ const MyQueueSlotsPage = () => {
     });
   };
 
-  const currentSlots = activeTab === "active" 
-    ? queueSlots.filter(slot => slot.status === "Active" || slot.status === "Called")
-    : historySlots;
+  const currentSlots = activeTab === "active" ? activeSlots : historySlots;
 
-  // stateful slots that can be updated (cancelled)
-  const [slotsState, setSlotsState] = useState<QueueSlot[]>(currentSlots);
-
-  useEffect(() => {
-    // load bookings from localStorage if any
-    try {
-      const raw = localStorage.getItem('myturn_bookings');
-      if (raw) {
-        const bookings = JSON.parse(raw);
-        // map bookings to QueueSlot shape
-        const mapped: QueueSlot[] = bookings.map((b: any, idx: number) => ({
-          id: b.id,
-          companyName: b.institutionName || 'Unknown',
-          companyLocation: '',
-          service: b.service || 'Service',
-          reason: b.reason || '',
-          bookedAt: new Date().toISOString(),
-          estimatedTime: b.estimatedTime || '',
-          position: b.position || (idx + 1),
-          totalInQueue: (b.position || (idx + 1)) + 5,
-          status: b.status === 'booked' ? 'Active' : 'Active',
-          companyPhone: '',
-          rating: 4.0
-        }));
-        if (mapped.length > 0) setSlotsState(mapped);
-      }
-    } catch (e) {
-      // ignore
-    }
-  }, []);
-
-  useEffect(() => {
-    // when activeTab or source data changes, reset slotsState accordingly
-    if (!localStorage.getItem('myturn_bookings')) {
-      setSlotsState(currentSlots);
-    }
-  }, [activeTab]);
+  if (loading) {
+    return (
+      <ClientLayout>
+        <div className="flex items-center justify-center h-96">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      </ClientLayout>
+    );
+  }
 
   return (
     <ClientLayout>
-      <div className="min-h-screen bg-[#e1d4c2] dark:bg-[#291c0e] transition-colors duration-300">
+      <div className="min-h-screen bg-[#e1d4c2] dark:bg-[#291c0e]">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           {/* Header */}
           <div className="mb-8">
@@ -258,20 +249,20 @@ const MyQueueSlotsPage = () => {
           <div className="flex space-x-1 mb-8 bg-[#beb5a9]/30 dark:bg-[#6e473b]/30 p-1 rounded-xl">
             <button
               onClick={() => setActiveTab("active")}
-              className={`flex-1 py-3 px-4 text-sm font-medium rounded-lg transition-all duration-200 ${
+              className={`flex-1 py-3 px-4 text-sm font-medium rounded-lg transition-all ${
                 activeTab === "active"
                   ? "bg-white dark:bg-[#6e473b] text-[#291c0e] dark:text-[#e1d4c2] shadow-sm"
-                  : "text-[#6e473b] dark:text-[#beb5a9] hover:text-[#291c0e] dark:hover:text-[#e1d4c2]"
+                  : "text-[#6e473b] dark:text-[#beb5a9]"
               }`}
             >
-              Active Slots ({queueSlots.filter(slot => slot.status === "Active" || slot.status === "Called").length})
+              Active Slots ({activeSlots.length})
             </button>
             <button
               onClick={() => setActiveTab("history")}
-              className={`flex-1 py-3 px-4 text-sm font-medium rounded-lg transition-all duration-200 ${
+              className={`flex-1 py-3 px-4 text-sm font-medium rounded-lg transition-all ${
                 activeTab === "history"
                   ? "bg-white dark:bg-[#6e473b] text-[#291c0e] dark:text-[#e1d4c2] shadow-sm"
-                  : "text-[#6e473b] dark:text-[#beb5a9] hover:text-[#291c0e] dark:hover:text-[#e1d4c2]"
+                  : "text-[#6e473b] dark:text-[#beb5a9]"
               }`}
             >
               History ({historySlots.length})
@@ -280,153 +271,116 @@ const MyQueueSlotsPage = () => {
 
           {/* Slots Grid */}
           <div className="space-y-6">
-            {slotsState.length === 0 ? (
+            {currentSlots.length === 0 ? (
               <div className="text-center py-12">
-                <div className="w-16 h-16 bg-[#beb5a9]/30 dark:bg-[#6e473b]/30 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Users className="w-8 h-8 text-[#6e473b] dark:text-[#beb5a9]" />
-                </div>
+                <Users className="h-12 w-12 text-[#6e473b] dark:text-[#beb5a9] mx-auto mb-4" />
                 <h3 className="text-xl font-medium text-[#291c0e] dark:text-[#e1d4c2] mb-2">
                   No {activeTab} slots
                 </h3>
                 <p className="text-[#6e473b] dark:text-[#beb5a9]">
                   {activeTab === "active" 
                     ? "You don't have any active bookings at the moment"
-                    : "Your completed and missed appointments will appear here"
+                    : "Your completed and cancelled appointments will appear here"
                   }
                 </p>
               </div>
             ) : (
-              slotsState.map((slot) => (
+              currentSlots.map((slot) => (
                 <div
                   key={slot.id}
-                  className="bg-white dark:bg-[#6e473b]/40 rounded-xl border border-[#beb5a9] dark:border-[#6e473b] shadow-lg hover:shadow-xl transition-all duration-300 rounded-[16px]"
+                  className="bg-white dark:bg-[#6e473b]/40 rounded-xl border border-[#beb5a9] dark:border-[#6e473b] shadow-lg"
                 >
-                  {/* Card Header */}
                   <div className="p-6 pb-4">
                     <div className="flex justify-between items-start mb-4">
                       <div className="flex-1">
                         <div className="flex items-center gap-3 mb-2">
                           <h3 className="text-xl font-bold text-[#291c0e] dark:text-[#e1d4c2]">
-                            {slot.companyName}
+                            {slot.institution?.name}
                           </h3>
                           <div className="flex items-center">
                             <Star className="w-4 h-4 text-yellow-500 fill-current" />
                             <span className="ml-1 text-sm text-[#6e473b] dark:text-[#beb5a9]">
-                              {slot.rating}
+                              {slot.institution?.rating || 0}
                             </span>
                           </div>
                         </div>
                         <div className="flex items-center text-[#6e473b] dark:text-[#beb5a9] mb-2">
-                          <MapPin className="w-4 h-4 mr-2 flex-shrink-0" />
-                          <span className="text-sm">{slot.companyLocation}</span>
+                          <MapPin className="w-4 h-4 mr-2" />
+                          <span className="text-sm">{slot.institution?.location}</span>
                         </div>
                       </div>
                       <div className="flex flex-col items-end gap-2">
-                        <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(slot.status)}`}>
+                        <span className={`px-3 py-1 rounded-full text-sm font-medium capitalize ${getStatusColor(slot.status)}`}>
                           {slot.status}
                         </span>
                         {activeTab === "active" && (
                           <div className="text-right">
                             <div className="text-sm text-[#6e473b] dark:text-[#beb5a9]">
-                              Expected at
+                              Queue Number
                             </div>
                             <div className="font-semibold text-[#291c0e] dark:text-[#e1d4c2]">
-                              {slot.estimatedTime}
+                              #{slot.queue_number}
                             </div>
                           </div>
                         )}
                       </div>
                     </div>
 
-                    {/* Service Info */}
                     <div className="bg-[#e1d4c2] dark:bg-[#291c0e]/50 rounded-lg p-4 mb-4">
                       <div className="flex justify-between items-start mb-2">
                         <div>
                           <span className="text-sm text-[#6e473b] dark:text-[#beb5a9]">Service:</span>
                           <div className="font-medium text-[#291c0e] dark:text-[#e1d4c2]">
-                            {slot.service}
+                            {slot.service_type || 'General Service'}
                           </div>
                         </div>
                         {activeTab === "active" && (
                           <div className="text-right">
-                            <div className="text-sm text-[#6e473b] dark:text-[#beb5a9]">Position</div>
-                            <div className={`font-bold text-lg ${getPositionColor(slot.position, slot.totalInQueue)}`}>
-                              {slot.position} of {slot.totalInQueue}
+                            <div className="text-sm text-[#6e473b] dark:text-[#beb5a9]">Est. Wait</div>
+                            <div className="font-bold text-lg text-[#291c0e] dark:text-[#e1d4c2]">
+                              {slot.estimated_wait_time} mins
                             </div>
                           </div>
                         )}
                       </div>
-                      <div>
-                        <span className="text-sm text-[#6e473b] dark:text-[#beb5a9]">Reason:</span>
-                        <div className="text-sm text-[#291c0e] dark:text-[#e1d4c2] mt-1">
-                          {slot.reason}
-                        </div>
-                      </div>
                     </div>
 
-                    {/* Booking Details */}
                     <div className="flex justify-between items-center text-sm text-[#6e473b] dark:text-[#beb5a9] mb-4">
                       <div className="flex items-center">
                         <Calendar className="w-4 h-4 mr-2" />
-                        Booked: {formatDate(slot.bookedAt)} at {formatTime(slot.bookedAt)}
+                        Joined: {formatDate(slot.joined_at)} at {formatTime(slot.joined_at)}
                       </div>
-                      <div className="flex items-center">
-                        <Phone className="w-4 h-4 mr-2" />
-                        {slot.companyPhone}
-                      </div>
+                      {slot.institution?.phone && (
+                        <div className="flex items-center">
+                          <Phone className="w-4 h-4 mr-2" />
+                          {slot.institution.phone}
+                        </div>
+                      )}
                     </div>
                   </div>
 
                   {/* Action Buttons */}
-                  {activeTab === "active" && slot.status !== "Called" && (
+                  {activeTab === "active" && slot.status === "waiting" && (
                     <div className="px-6 pb-6">
                       <div className="flex gap-3">
                         <button
                           onClick={() => openGiftModal(slot, "next")}
-                          className="flex-1 bg-[#a78d78] hover:bg-[#6e473b] text-white py-3 px-4 rounded-lg font-medium transition-all duration-200 flex items-center justify-center gap-2"
+                          className="flex-1 bg-[#a78d78] hover:bg-[#6e473b] text-white py-3 px-4 rounded-lg font-medium flex items-center justify-center gap-2"
                         >
                           <Gift className="w-4 h-4" />
                           Gift to Next Person
                         </button>
                         <button
-                          onClick={() => openGiftModal(slot, "specific")}
-                          className="flex-1 bg-[#6e473b] hover:bg-[#a78d78] text-white py-3 px-4 rounded-lg font-medium transition-all duration-200 flex items-center justify-center gap-2"
+                          onClick={() => handleCancelSlot(slot.id)}
+                          className="bg-red-600 hover:bg-red-700 text-white py-3 px-4 rounded-lg font-medium"
                         >
-                          <UserPlus className="w-4 h-4" />
-                          Gift to Someone
+                          Cancel
                         </button>
                       </div>
                     </div>
                   )}
 
-                  {/* Cancel button for any active slot */}
-                  {activeTab === "active" && (
-                    <div className="px-6 pb-6">
-                      <div className="flex justify-end">
-                        <button
-                          onClick={() => {
-                            try {
-                              const storageKey = 'myturn_bookings';
-                              const raw = localStorage.getItem(storageKey);
-                              const existing = raw ? JSON.parse(raw) : [];
-                              // remove by id (works for both numeric and string ids)
-                              const filtered = existing.filter((b: any) => String(b.id) !== String(slot.id));
-                              localStorage.setItem(storageKey, JSON.stringify(filtered));
-                            } catch (e) {
-                              // ignore
-                            }
-                            // remove from local state
-                            setSlotsState(prev => prev.filter(s => String(s.id) !== String(slot.id)));
-                          }}
-                          className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700"
-                        >
-                          Cancel Slot
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
-                  {slot.status === "Called" && (
+                  {slot.status === "called" && (
                     <div className="px-6 pb-6">
                       <div className="bg-green-100 dark:bg-green-900/30 border border-green-200 dark:border-green-800 rounded-lg p-4 flex items-center">
                         <CheckCircle className="w-5 h-5 text-green-600 dark:text-green-400 mr-3" />
@@ -451,7 +405,6 @@ const MyQueueSlotsPage = () => {
         {giftModal.isOpen && giftModal.slot && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
             <div className="bg-white dark:bg-[#291c0e] rounded-xl max-w-md w-full border border-[#beb5a9] dark:border-[#6e473b]">
-              {/* Modal Header */}
               <div className="flex justify-between items-center p-6 border-b border-[#beb5a9] dark:border-[#6e473b]">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 bg-[#a78d78]/20 rounded-full flex items-center justify-center">
@@ -463,8 +416,7 @@ const MyQueueSlotsPage = () => {
                 </div>
                 <button
                   onClick={closeGiftModal}
-                  aria-label="Close gift modal"
-                  className="text-[#6e473b] dark:text-[#beb5a9] hover:text-[#291c0e] dark:hover:text-[#e1d4c2]"
+                  className="text-[#6e473b] dark:text-[#beb5a9]"
                 >
                   <X className="w-6 h-6" />
                 </button>
@@ -479,47 +431,20 @@ const MyQueueSlotsPage = () => {
                     Slot Gifted Successfully!
                   </h3>
                   <p className="text-[#6e473b] dark:text-[#beb5a9] text-sm">
-                    {giftModal.giftType === "next" 
-                      ? "Your slot has been given to the next person in line"
-                      : `Your slot has been sent to the specified recipient`
-                    }
+                    Your slot has been transferred
                   </p>
                 </div>
               ) : (
                 <div className="p-6 space-y-4">
-                  {/* Slot Info */}
                   <div className="bg-[#e1d4c2] dark:bg-[#6e473b]/30 p-4 rounded-lg">
                     <h3 className="font-semibold text-[#291c0e] dark:text-[#e1d4c2] mb-1">
-                      {giftModal.slot.companyName}
+                      {giftModal.slot.institution?.name}
                     </h3>
-                    <p className="text-sm text-[#6e473b] dark:text-[#beb5a9] mb-1">
-                      Service: {giftModal.slot.service}
-                    </p>
                     <p className="text-sm text-[#6e473b] dark:text-[#beb5a9]">
-                      Position: {giftModal.slot.position} of {giftModal.slot.totalInQueue}
+                      Queue Number: #{giftModal.slot.queue_number}
                     </p>
                   </div>
 
-                  {/* Gift Type Info */}
-                  <div className="flex items-center gap-3 p-3 bg-[#a78d78]/10 rounded-lg">
-                    {giftModal.giftType === "next" ? (
-                      <>
-                        <ChevronRight className="w-5 h-5 text-[#a78d78]" />
-                        <span className="text-sm text-[#291c0e] dark:text-[#e1d4c2]">
-                          Gift to the next person in line
-                        </span>
-                      </>
-                    ) : (
-                      <>
-                        <Share2 className="w-5 h-5 text-[#a78d78]" />
-                        <span className="text-sm text-[#291c0e] dark:text-[#e1d4c2]">
-                          Gift to a specific person
-                        </span>
-                      </>
-                    )}
-                  </div>
-
-                  {/* Recipient Phone (for specific gifting) */}
                   {giftModal.giftType === "specific" && (
                     <div>
                       <label className="block text-sm font-medium text-[#291c0e] dark:text-[#e1d4c2] mb-2">
@@ -531,53 +456,25 @@ const MyQueueSlotsPage = () => {
                         onChange={(e) => setRecipientPhone(e.target.value)}
                         placeholder="+260 XXX XXX XXX"
                         className="w-full p-3 border border-[#beb5a9] dark:border-[#6e473b] rounded-lg
-                        bg-white dark:bg-[#6e473b]/30 
-                        text-[#291c0e] dark:text-[#e1d4c2]
-                        placeholder-[#6e473b] dark:placeholder-[#beb5a9]
-                        focus:ring-2 focus:ring-[#a78d78] focus:border-transparent"
+                        bg-white dark:bg-[#6e473b]/30 text-[#291c0e] dark:text-[#e1d4c2]"
                       />
                     </div>
                   )}
 
-                  {/* Optional Message */}
-                  <div>
-                    <label className="block text-sm font-medium text-[#291c0e] dark:text-[#e1d4c2] mb-2">
-                      Message (Optional)
-                    </label>
-                    <textarea
-                      value={giftMessage}
-                      onChange={(e) => setGiftMessage(e.target.value)}
-                      placeholder="Add a nice message with your gift..."
-                      rows={3}
-                      className="w-full p-3 border border-[#beb5a9] dark:border-[#6e473b] rounded-lg
-                      bg-white dark:bg-[#6e473b]/30 
-                      text-[#291c0e] dark:text-[#e1d4c2]
-                      placeholder-[#6e473b] dark:placeholder-[#beb5a9]
-                      focus:ring-2 focus:ring-[#a78d78] focus:border-transparent
-                      resize-none"
-                    />
-                  </div>
-
-                  {/* Gift Button */}
                   <button
                     onClick={handleGift}
-                    disabled={
-                      (giftModal.giftType === "specific" && !recipientPhone.trim()) || 
-                      isGifting
-                    }
-                    className="w-full py-3 px-4 rounded-lg font-medium text-white transition-all duration-200
-                    bg-[#a78d78] hover:bg-[#6e473b] disabled:bg-[#beb5a9] disabled:cursor-not-allowed
-                    flex items-center justify-center gap-2"
+                    disabled={isGifting}
+                    className="w-full py-3 px-4 rounded-lg font-medium text-white bg-[#a78d78] hover:bg-[#6e473b] disabled:bg-[#beb5a9] flex items-center justify-center gap-2"
                   >
                     {isGifting ? (
                       <>
-                        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                        <Loader2 className="w-4 h-4 animate-spin" />
                         Gifting...
                       </>
                     ) : (
                       <>
                         <Gift className="w-4 h-4" />
-                        {giftModal.giftType === "next" ? "Gift to Next Person" : "Send Gift"}
+                        Send Gift
                       </>
                     )}
                   </button>
